@@ -131,8 +131,7 @@
           {
             "id": "c1d2e3f4-0000-4a1b-8c2d-3e4f5a6b7c8d",
             "seq": 4,
-            "actionType": "ATTACK",
-            "direction": null,
+            "actionType": "attack",
             "status": "RUNNING",
             "targetX": null,
             "targetY": null,
@@ -142,8 +141,7 @@
           {
             "id": "d2e3f4a5-1111-4b2c-9d3e-4f5a6b7c8d9e",
             "seq": 5,
-            "actionType": "DEFEND",
-            "direction": null,
+            "actionType": "defend",
             "status": "QUEUED",
             "targetX": null,
             "targetY": null,
@@ -168,7 +166,7 @@
 
 > `queue`는 캐릭터별로 `seq` 오름차순입니다. 실행 중인 동작이 있으면 첫 번째 항목의 `status`가 `RUNNING`입니다.
 > 완료된 동작은 큐에서 제거되므로 포함되지 않습니다.
-> `targetX`, `targetY`, `blocked`는 `MOVE`/`ROLL`이 실행을 시작할 때 정해집니다. `QUEUED` 상태에서는 `null`/`false`입니다.
+> `targetX`, `targetY`, `blocked`는 이동 동작(`move_*`, `roll`)이 실행을 시작할 때 정해집니다. `QUEUED` 상태에서는 `null`/`false`입니다.
 >
 
 **Errors:** 공통 Errors만 해당
@@ -211,8 +209,7 @@
     "action": {
       "id": "e3f4a5b6-2222-4c3d-8e4f-5a6b7c8d9e0f",
       "seq": 6,
-      "actionType": "MOVE",
-      "direction": "E",
+      "actionType": "move_right",
       "status": "QUEUED",
       "targetX": null,
       "targetY": null,
@@ -225,7 +222,8 @@
 ```
 
 > **응답은 "큐에 넣었다"는 뜻이지 "실행이 끝났다"는 뜻이 아닙니다.** 실제 실행 시작과 완료는 WebSocket 이벤트(`ACTION_STARTED`, `ACTION_FINISHED`)로 알려줍니다.
-> AI는 항상 Action Set 안에서 매칭하므로 "이해하지 못함" 응답은 없습니다. `위로 3칸`, `위로 가서 공격`처럼 반복하거나 이어 쓴 입력도 Action 1개로 처리됩니다.
+> AI(aiserver, Jev)는 항상 Action Set 안에서 매칭하므로 "이해하지 못함" 응답은 없습니다. `오늘 날씨 좋다`처럼 명령이 아닌 말도 가장 비슷한 Action 1개로 처리됩니다. `위로 3칸`, `위로 가서 공격`처럼 반복하거나 이어 쓴 입력도 마찬가지입니다.
+> AI 호출이 실패하거나 5초 안에 응답이 없으면 큐에 넣지 않고 에러(`502`/`504`)를 돌려줍니다. 서버는 자동으로 재시도하지 않습니다.
 > 서버는 입력 원문을 보관하거나 돌려주지 않습니다. 화면에 표시할 문구는 클라이언트가 자신이 보낸 `text`를 `action.id`와 짝지어 직접 관리합니다.
 > `queueLength`는 방금 넣은 동작과 실행 중인 동작을 포함한 해당 캐릭터의 큐 길이입니다.
 >
@@ -238,7 +236,8 @@
 | `404` | `CHARACTER_NOT_FOUND` | `characterId`가 이 세션의 캐릭터가 아님 |
 | `409` | `SESSION_ENDED` | 이미 종료된 세션 |
 | `429` | `QUEUE_FULL` | 실행 중인 동작을 포함해 해당 캐릭터의 큐가 100개로 가득 참 |
-| `502` | `AI_UNAVAILABLE` | AI 서버 호출에 실패했거나 응답 시간이 초과됨 |
+| `502` | `AI_UNAVAILABLE` | aiserver 호출에 실패함 (연결 실패, 5xx 응답, Action Set에 없는 값 반환) |
+| `504` | `AI_TIMEOUT` | aiserver가 5초 안에 응답하지 않음 |
 
 ---
 
@@ -362,8 +361,7 @@
     "action": {
       "id": "e3f4a5b6-2222-4c3d-8e4f-5a6b7c8d9e0f",
       "seq": 6,
-      "actionType": "ROLL",
-      "direction": null,
+      "actionType": "roll",
       "status": "RUNNING",
       "targetX": 6,
       "targetY": 5,
@@ -387,8 +385,7 @@
     "action": {
       "id": "f4a5b6c7-3333-4d4e-9f5a-6b7c8d9e0f1a",
       "seq": 7,
-      "actionType": "MOVE",
-      "direction": "N",
+      "actionType": "move_up",
       "status": "RUNNING",
       "targetX": 6,
       "targetY": 2,
@@ -483,8 +480,7 @@
 | `character.type` | `PLAYER`, `ENEMY` |
 | `character.facing` | `N`, `E`, `S`, `W` |
 | `character.state` | `IDLE`, `MOVING`, `TURNING`, `ATTACKING`, `DEFENDING`, `ROLLING` |
-| `action.actionType` | `MOVE`, `TURN`, `ATTACK`, `DEFEND`, `ROLL` |
-| `action.direction` | `MOVE`: `N`/`E`/`S`/`W`, `TURN`: `LEFT`/`RIGHT`, 그 외 `null` |
+| `action.actionType` | `move_up`, `move_down`, `move_left`, `move_right`, `turn_left`, `turn_right`, `attack`, `defend`, `roll` (`aiserver/actions.json`의 키) |
 | `action.status` | `QUEUED`, `RUNNING` |
 
-Action별 동작 시간, 이동 규칙, 캐릭터 시작 상태는 [erd.md](erd.md)의 "4. 코드 고정값"을 따른다.
+Action별 동작 시간, 이동 규칙, AI 호출 규칙, 캐릭터 시작 상태는 [erd.md](erd.md)의 "4. 코드 고정값"을 따른다.
