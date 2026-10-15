@@ -7,8 +7,9 @@
 - Base URL: `/api/v1`
 - 사용자 계정이 없으므로 로그인 인증은 없다. 클라이언트는 `POST /sessions`로 받은 `sessionId`로 이후 요청을 보낸다.
 - 모든 게임 상태는 서버 메모리에 있다. 서버를 재시작하거나 세션이 만료되면 상태가 사라진다.
+- 세션 하나에 캐릭터가 2개(`PLAYER`, `ENEMY`) 있고, 한 사용자가 두 캐릭터에 각각 명령을 보낸다.
 - 세션은 마지막 입력(`lastActiveAt`) 이후 30분이 지나면 만료된다.
-- 클라이언트는 명령을 REST로 보내고, 동작 진행 상황은 WebSocket으로 받는다. 이후 멀티플레이에서는 같은 WebSocket 채널로 세션 내 모든 플레이어에게 브로드캐스트한다.
+- 클라이언트는 명령을 REST로 보내고, 동작 진행 상황은 WebSocket으로 받는다. 이후 멀티플레이에서는 같은 WebSocket 채널로 세션 내 모든 클라이언트에 브로드캐스트한다.
 - 좌표(`x`, `y`)는 그리드 칸 단위다. 좌상단이 `(0, 0)`이고, 오른쪽이 `x+`, 아래쪽이 `y+`다.
 
 **성공 응답 형식:**
@@ -43,7 +44,7 @@
 
 ### POST /sessions
 
-> 새 게임 세션을 만들고 플레이어 1명을 입장시킵니다. 게임 화면에 처음 들어올 때 호출합니다.
+> 새 게임 세션을 만들고 캐릭터 2개(플레이어, 적)를 배치합니다. 게임 화면에 처음 들어올 때 호출합니다.
 >
 
 **Auth Required:** No
@@ -62,18 +63,30 @@
       "mapCols": 13,
       "mapRows": 9
     },
-    "player": {
-      "id": "a8c4e2b1-5f3d-4e7a-b6c9-1d2e3f4a5b6c",
-      "x": 6,
-      "y": 4,
-      "facing": "N",
-      "state": "IDLE"
-    }
+    "characters": [
+      {
+        "id": "a8c4e2b1-5f3d-4e7a-b6c9-1d2e3f4a5b6c",
+        "type": "PLAYER",
+        "x": 6,
+        "y": 7,
+        "facing": "N",
+        "state": "IDLE"
+      },
+      {
+        "id": "b9d5f3c2-6a4e-4f8b-87da-2e3f4a5b6c7d",
+        "type": "ENEMY",
+        "x": 6,
+        "y": 1,
+        "facing": "S",
+        "state": "IDLE"
+      }
+    ]
   }
 }
 ```
 
-> 플레이어는 맵 중앙 `(6, 4)`에서 북쪽을 바라본 상태로 시작합니다.
+> 플레이어는 아래쪽 `(6, 7)`에서 북쪽을, 적은 위쪽 `(6, 1)`에서 남쪽을 바라본 상태로 시작합니다.
+> 이후 명령을 보낼 때는 각 캐릭터의 `id`를 사용합니다.
 > 응답을 받으면 클라이언트는 바로 [WebSocket](#ws-wssessionssessionid)에 연결합니다.
 >
 
@@ -83,7 +96,7 @@
 
 ### GET /sessions/{sessionId}
 
-> 세션의 현재 상태(플레이어, 대기 중인 동작)를 조회합니다. 새로고침하거나 WebSocket에 다시 연결한 뒤 화면을 복구할 때 호출합니다.
+> 세션의 현재 상태(캐릭터별 상태와 대기 중인 동작)를 조회합니다. 새로고침하거나 WebSocket에 다시 연결한 뒤 화면을 복구할 때 호출합니다.
 >
 
 **Auth Required:** No
@@ -106,48 +119,65 @@
       "mapCols": 13,
       "mapRows": 9
     },
-    "player": {
-      "id": "a8c4e2b1-5f3d-4e7a-b6c9-1d2e3f4a5b6c",
-      "x": 6,
-      "y": 3,
-      "facing": "E",
-      "state": "ATTACKING"
-    },
-    "queue": [
+    "characters": [
       {
-        "id": "c1d2e3f4-0000-4a1b-8c2d-3e4f5a6b7c8d",
-        "seq": 4,
-        "actionType": "ATTACK",
-        "direction": null,
-        "label": "칼 휘둘러",
-        "status": "RUNNING",
-        "startedAt": "2026-10-15T12:00:03.120Z"
+        "id": "a8c4e2b1-5f3d-4e7a-b6c9-1d2e3f4a5b6c",
+        "type": "PLAYER",
+        "x": 6,
+        "y": 6,
+        "facing": "N",
+        "state": "ATTACKING",
+        "queue": [
+          {
+            "id": "c1d2e3f4-0000-4a1b-8c2d-3e4f5a6b7c8d",
+            "seq": 4,
+            "actionType": "ATTACK",
+            "direction": null,
+            "status": "RUNNING",
+            "targetX": null,
+            "targetY": null,
+            "blocked": false,
+            "startedAt": "2026-10-15T12:00:03.120Z"
+          },
+          {
+            "id": "d2e3f4a5-1111-4b2c-9d3e-4f5a6b7c8d9e",
+            "seq": 5,
+            "actionType": "DEFEND",
+            "direction": null,
+            "status": "QUEUED",
+            "targetX": null,
+            "targetY": null,
+            "blocked": false,
+            "startedAt": null
+          }
+        ]
       },
       {
-        "id": "d2e3f4a5-1111-4b2c-9d3e-4f5a6b7c8d9e",
-        "seq": 5,
-        "actionType": "DEFEND",
-        "direction": null,
-        "label": "막아",
-        "status": "QUEUED",
-        "startedAt": null
+        "id": "b9d5f3c2-6a4e-4f8b-87da-2e3f4a5b6c7d",
+        "type": "ENEMY",
+        "x": 6,
+        "y": 1,
+        "facing": "S",
+        "state": "IDLE",
+        "queue": []
       }
     ]
   }
 }
 ```
 
-> `queue`는 `seq` 오름차순입니다. 실행 중인 동작이 있으면 첫 번째 항목의 `status`가 `RUNNING`입니다.
+> `queue`는 캐릭터별로 `seq` 오름차순입니다. 실행 중인 동작이 있으면 첫 번째 항목의 `status`가 `RUNNING`입니다.
 > 완료된 동작은 큐에서 제거되므로 포함되지 않습니다.
+> `targetX`, `targetY`, `blocked`는 `MOVE`/`ROLL`이 실행을 시작할 때 정해집니다. `QUEUED` 상태에서는 `null`/`false`입니다.
 >
 
 **Errors:** 공통 Errors만 해당
 
 ---
 
-### POST /sessions/{sessionId}/commands
+### POST /sessions/{sessionId}/characters/{characterId}/commands
 
-> 사용자가 입력한 텍스트를 보냅니다. 서버는 AI로 Action Set 중 가장 비슷한 Action **1개**를 찾아 큐에 넣고, 매칭 결과를 돌려줍니다.
+> 지정한 캐릭터에게 사용자가 입력한 텍스트를 보냅니다. 서버는 AI로 Action Set 중 가장 비슷한 Action **1개**를 찾아 그 캐릭터의 큐에 넣고, 매칭 결과를 돌려줍니다.
 >
 
 **Auth Required:** No
@@ -157,6 +187,7 @@
 | 파라미터 | 설명 |
 | --- | --- |
 | `sessionId` | 세션 ID |
+| `characterId` | 명령을 받을 캐릭터 ID (플레이어 또는 적) |
 
 **Request Body:**
 
@@ -176,13 +207,16 @@
 {
   "success": true,
   "data": {
+    "characterId": "a8c4e2b1-5f3d-4e7a-b6c9-1d2e3f4a5b6c",
     "action": {
       "id": "e3f4a5b6-2222-4c3d-8e4f-5a6b7c8d9e0f",
       "seq": 6,
       "actionType": "MOVE",
       "direction": "E",
-      "label": "오른쪽으로 한 발짝 가볼까",
       "status": "QUEUED",
+      "targetX": null,
+      "targetY": null,
+      "blocked": false,
       "startedAt": null
     },
     "queueLength": 3
@@ -192,7 +226,8 @@
 
 > **응답은 "큐에 넣었다"는 뜻이지 "실행이 끝났다"는 뜻이 아닙니다.** 실제 실행 시작과 완료는 WebSocket 이벤트(`ACTION_STARTED`, `ACTION_FINISHED`)로 알려줍니다.
 > AI는 항상 Action Set 안에서 매칭하므로 "이해하지 못함" 응답은 없습니다. `위로 3칸`, `위로 가서 공격`처럼 반복하거나 이어 쓴 입력도 Action 1개로 처리됩니다.
-> `queueLength`는 방금 넣은 동작과 실행 중인 동작을 포함한 큐 길이입니다.
+> 서버는 입력 원문을 보관하거나 돌려주지 않습니다. 화면에 표시할 문구는 클라이언트가 자신이 보낸 `text`를 `action.id`와 짝지어 직접 관리합니다.
+> `queueLength`는 방금 넣은 동작과 실행 중인 동작을 포함한 해당 캐릭터의 큐 길이입니다.
 >
 
 **Errors:**
@@ -200,15 +235,16 @@
 | Status | code | 설명 |
 | --- | --- | --- |
 | `400` | `VALIDATION_ERROR` | `text`가 없거나, 공백만 있거나, 500자를 넘음 |
+| `404` | `CHARACTER_NOT_FOUND` | `characterId`가 이 세션의 캐릭터가 아님 |
 | `409` | `SESSION_ENDED` | 이미 종료된 세션 |
-| `429` | `QUEUE_FULL` | 실행 중인 동작을 포함해 큐가 100개로 가득 참 |
+| `429` | `QUEUE_FULL` | 실행 중인 동작을 포함해 해당 캐릭터의 큐가 100개로 가득 참 |
 | `502` | `AI_UNAVAILABLE` | AI 서버 호출에 실패했거나 응답 시간이 초과됨 |
 
 ---
 
 ### POST /sessions/{sessionId}/reset
 
-> 실행 중인 동작과 대기 중인 동작을 모두 지우고, 플레이어를 시작 위치로 되돌립니다. 화면의 "초기화" 버튼에 해당합니다.
+> 두 캐릭터의 실행 중인 동작과 대기 중인 동작을 모두 지우고, 시작 위치로 되돌립니다. 화면의 "초기화" 버튼에 해당합니다.
 >
 
 **Auth Required:** No
@@ -227,19 +263,31 @@
 {
   "success": true,
   "data": {
-    "player": {
-      "id": "a8c4e2b1-5f3d-4e7a-b6c9-1d2e3f4a5b6c",
-      "x": 6,
-      "y": 4,
-      "facing": "N",
-      "state": "IDLE"
-    },
-    "queue": []
+    "characters": [
+      {
+        "id": "a8c4e2b1-5f3d-4e7a-b6c9-1d2e3f4a5b6c",
+        "type": "PLAYER",
+        "x": 6,
+        "y": 7,
+        "facing": "N",
+        "state": "IDLE",
+        "queue": []
+      },
+      {
+        "id": "b9d5f3c2-6a4e-4f8b-87da-2e3f4a5b6c7d",
+        "type": "ENEMY",
+        "x": 6,
+        "y": 1,
+        "facing": "S",
+        "state": "IDLE",
+        "queue": []
+      }
+    ]
   }
 }
 ```
 
-> 세션 ID와 플레이어 ID는 그대로 유지됩니다. 초기화 후 WebSocket으로 `SESSION_RESET` 이벤트가 전송됩니다.
+> 세션 ID와 캐릭터 ID는 그대로 유지됩니다. 초기화 후 WebSocket으로 `SESSION_RESET` 이벤트가 전송됩니다.
 >
 
 **Errors:**
@@ -275,7 +323,7 @@
 
 ### WS /ws/sessions/{sessionId}
 
-> 세션의 동작 진행 상황을 실시간으로 받는 WebSocket 채널입니다. v1에서는 서버 → 클라이언트 단방향으로만 사용하며, 명령 입력은 REST로 보냅니다.
+> 세션 내 두 캐릭터의 동작 진행 상황을 실시간으로 받는 WebSocket 채널입니다. v1에서는 서버 → 클라이언트 단방향으로만 사용하며, 명령 입력은 REST로 보냅니다.
 >
 
 **Auth Required:** No
@@ -299,9 +347,9 @@
 
 | type | 발생 시점 | 설명 |
 | --- | --- | --- |
-| `ACTION_STARTED` | 큐의 동작 실행이 시작될 때 | 시작 상태(`from`)와 결과 상태(`to`)를 보내고, 클라이언트는 `durationMs` 동안 보간해 애니메이션함 |
-| `ACTION_FINISHED` | 동작 실행이 끝났을 때 | 완료된 동작 ID와 확정된 플레이어 상태를 보냄 |
-| `SESSION_RESET` | 초기화했을 때 | 초기화된 플레이어 상태를 보냄 |
+| `ACTION_STARTED` | 캐릭터 큐의 동작 실행이 시작될 때 | 시작 상태(`from`)와 결과 상태(`to`)를 보내고, 클라이언트는 `durationMs` 동안 보간해 애니메이션함 |
+| `ACTION_FINISHED` | 동작 실행이 끝났을 때 | 완료된 동작 ID와 확정된 캐릭터 상태를 보냄 |
+| `SESSION_RESET` | 초기화했을 때 | 초기화된 두 캐릭터 상태를 보냄 |
 | `SESSION_ENDED` | 세션이 종료되거나 만료됐을 때 | 이벤트 전송 후 서버가 연결을 닫음 |
 
 **`ACTION_STARTED` 예시:**
@@ -310,19 +358,46 @@
 {
   "type": "ACTION_STARTED",
   "data": {
+    "characterId": "a8c4e2b1-5f3d-4e7a-b6c9-1d2e3f4a5b6c",
     "action": {
       "id": "e3f4a5b6-2222-4c3d-8e4f-5a6b7c8d9e0f",
       "seq": 6,
       "actionType": "ROLL",
       "direction": null,
-      "label": "앞으로 굴러",
       "status": "RUNNING",
+      "targetX": 6,
+      "targetY": 5,
+      "blocked": false,
       "startedAt": "2026-10-15T12:00:05.000Z"
     },
-    "playerId": "a8c4e2b1-5f3d-4e7a-b6c9-1d2e3f4a5b6c",
     "durationMs": 500,
-    "from": { "x": 6, "y": 4, "facing": "E" },
-    "to":   { "x": 8, "y": 4, "facing": "E" }
+    "from": { "x": 6, "y": 6, "facing": "N" },
+    "to":   { "x": 6, "y": 5, "facing": "N" }
+  }
+}
+```
+
+**`ACTION_STARTED` 예시 (충돌로 막힘):**
+
+```json
+{
+  "type": "ACTION_STARTED",
+  "data": {
+    "characterId": "a8c4e2b1-5f3d-4e7a-b6c9-1d2e3f4a5b6c",
+    "action": {
+      "id": "f4a5b6c7-3333-4d4e-9f5a-6b7c8d9e0f1a",
+      "seq": 7,
+      "actionType": "MOVE",
+      "direction": "N",
+      "status": "RUNNING",
+      "targetX": 6,
+      "targetY": 2,
+      "blocked": true,
+      "startedAt": "2026-10-15T12:00:09.000Z"
+    },
+    "durationMs": 320,
+    "from": { "x": 6, "y": 2, "facing": "N" },
+    "to":   { "x": 6, "y": 2, "facing": "N" }
   }
 }
 ```
@@ -334,11 +409,12 @@
   "type": "ACTION_FINISHED",
   "data": {
     "actionId": "e3f4a5b6-2222-4c3d-8e4f-5a6b7c8d9e0f",
-    "player": {
+    "character": {
       "id": "a8c4e2b1-5f3d-4e7a-b6c9-1d2e3f4a5b6c",
-      "x": 8,
-      "y": 4,
-      "facing": "E",
+      "type": "PLAYER",
+      "x": 6,
+      "y": 5,
+      "facing": "N",
       "state": "IDLE"
     },
     "queueLength": 0
@@ -352,13 +428,24 @@
 {
   "type": "SESSION_RESET",
   "data": {
-    "player": {
-      "id": "a8c4e2b1-5f3d-4e7a-b6c9-1d2e3f4a5b6c",
-      "x": 6,
-      "y": 4,
-      "facing": "N",
-      "state": "IDLE"
-    }
+    "characters": [
+      {
+        "id": "a8c4e2b1-5f3d-4e7a-b6c9-1d2e3f4a5b6c",
+        "type": "PLAYER",
+        "x": 6,
+        "y": 7,
+        "facing": "N",
+        "state": "IDLE"
+      },
+      {
+        "id": "b9d5f3c2-6a4e-4f8b-87da-2e3f4a5b6c7d",
+        "type": "ENEMY",
+        "x": 6,
+        "y": 1,
+        "facing": "S",
+        "state": "IDLE"
+      }
+    ]
   }
 }
 ```
@@ -375,7 +462,8 @@
 ```
 
 > `reason`은 `CLOSED`(DELETE 호출) 또는 `EXPIRED`(30분 유휴 만료)입니다.
-> 이동 결과가 맵 경계를 넘으면 `to`는 경계 칸입니다. 이동하지 못해도 동작 시간(`durationMs`)은 그대로 소요됩니다.
+> 이동 목표 칸이 맵 경계를 넘으면 `to`는 경계 칸입니다.
+> 목표 칸에 다른 캐릭터가 있거나 다른 캐릭터가 이동 중인 칸이면 `blocked: true`이고 `to`는 `from`과 같습니다. 이때도 동작 시간(`durationMs`)은 그대로 소요됩니다.
 > 연결이 끊겼다가 다시 연결하면 `GET /sessions/{sessionId}`로 현재 상태를 먼저 맞춥니다.
 >
 
@@ -392,10 +480,11 @@
 | 필드 | 값 |
 | --- | --- |
 | `session.status` | `PLAYING`, `ENDED` |
-| `player.facing` | `N`, `E`, `S`, `W` |
-| `player.state` | `IDLE`, `MOVING`, `TURNING`, `ATTACKING`, `DEFENDING`, `ROLLING` |
+| `character.type` | `PLAYER`, `ENEMY` |
+| `character.facing` | `N`, `E`, `S`, `W` |
+| `character.state` | `IDLE`, `MOVING`, `TURNING`, `ATTACKING`, `DEFENDING`, `ROLLING` |
 | `action.actionType` | `MOVE`, `TURN`, `ATTACK`, `DEFEND`, `ROLL` |
 | `action.direction` | `MOVE`: `N`/`E`/`S`/`W`, `TURN`: `LEFT`/`RIGHT`, 그 외 `null` |
 | `action.status` | `QUEUED`, `RUNNING` |
 
-Action별 동작 시간과 효과는 [erd.md](erd.md)의 "4. 코드 고정값"을 따른다.
+Action별 동작 시간, 이동 규칙, 캐릭터 시작 상태는 [erd.md](erd.md)의 "4. 코드 고정값"을 따른다.
