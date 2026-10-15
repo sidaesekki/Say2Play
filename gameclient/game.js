@@ -3,16 +3,18 @@
 'use strict';
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-const input = document.getElementById('command');
-const feedback = document.getElementById('feedback');
-const history = document.getElementById('history');
 const W = 960, H = 700, STEP = 58;
 const GRID = {x:103,y:89,cols:13,rows:9};
 const CELL = {minX:GRID.x+STEP/2,maxX:GRID.x+(GRID.cols-.5)*STEP,minY:GRID.y+STEP/2,maxY:GRID.y+(GRID.rows-.5)*STEP};
 const directions = [[0,-1],[1,0],[0,1],[-1,0]];
 const names = ['북쪽 ↑','동쪽 →','남쪽 ↓','서쪽 ←'];
-const player = {x:480,y:350,dir:0,angle:0};
-let queue = [], active = null, count = 0, lastTime = 0, elapsed = 0;
+const starts = {player:{x:480,y:524,dir:0,angle:0},enemy:{x:480,y:176,dir:2,angle:Math.PI}};
+const actors = ['player','enemy'].map(id => ({
+  id, ...starts[id], queue:[], active:null,
+  input:document.getElementById(`${id}-command`),
+  feedback:document.getElementById(`${id}-feedback`)
+}));
+let lastTime = 0, elapsed = 0;
 const clamp = (v,min,max) => Math.max(min,Math.min(max,v));
 const ease = t => t*t*(3-2*t);
 function parseCommands(text) {
@@ -34,55 +36,80 @@ function parseCommands(text) {
     else if (/^(공격|공격하기|attack)$/.test(word)) type='attack';
     else if (/^(방어|방어하기|막기|defend|block)$/.test(word)) type='defend';
     else if (/^(구르기|구르기하기|굴러|회피|roll|dodge)$/.test(word)) type='roll';
-    else throw new Error(`“${piece}” 명령을 이해하지 못했어요. 아래 예시를 확인해 주세요.`);
-    for(let i=0;i<amount;i++) actions.push({type,dir,label:piece});
+    else throw new Error(`“${piece}” 명령을 이해하지 못했어요. 명령을 확인해 주세요.`);
+    if ((type==='move'||type==='roll') && amount>1) {
+      throw new Error('이동과 구르기는 한 번에 한 칸만 할 수 있어요. 다음 칸은 별도 명령으로 입력해 주세요.');
+    }
+    for(let i=0;i<amount;i++) actions.push({type,dir});
   }
   if (actions.length > 60) throw new Error('한 번에 최대 60개의 동작을 실행할 수 있어요.');
   return actions;
 }
-function submit(text) {
-  try {
-    const actions = parseCommands(text);
-    if(queue.length + actions.length + (active?1:0)>100) throw new Error('대기 중인 동작이 많아요. 잠시 뒤 다시 입력해 주세요.');
-    queue.push(...actions);
-    feedback.className='';feedback.textContent=`${actions.length}개 동작을 추가했어요. 순서대로 실행합니다.`;
-    input.value='';
-  } catch(error) {feedback.className='error';feedback.textContent=error.message;}
-}
-document.getElementById('command-form').addEventListener('submit',e=>{e.preventDefault();submit(input.value);});
-input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();submit(input.value);}});
-document.querySelectorAll('[data-command]').forEach(button=>button.addEventListener('click',()=>submit(button.dataset.command)));
-document.getElementById('reset').addEventListener('click',()=>{
-  queue=[];active=null;Object.assign(player,{x:480,y:350,dir:0,angle:0});count=0;
-  history.innerHTML='<li class="empty">당신의 첫 움직임을 기다리고 있어요.</li>';
-  document.getElementById('count').textContent='0 ACTIONS';feedback.className='';feedback.textContent='훈련장을 초기화했어요. 새로운 명령을 입력해 주세요.';input.value='';updateStatus();
-});
 const actionNames={move:'이동 중',turn:'회전 중',attack:'공격 중',defend:'방어 중',roll:'구르는 중'};
-function updateStatus(){
-  document.getElementById('state').textContent=active?actionNames[active.type]:'대기 중';
-  document.getElementById('pos-x').textContent=((player.x-480)/STEP).toFixed(1);
-  document.getElementById('pos-y').textContent=((350-player.y)/STEP).toFixed(1);
-  document.getElementById('facing').textContent=names[player.dir];
+function setFeedback(actor,message,error=false){
+  actor.feedback.classList.toggle('error',error);
+  actor.feedback.textContent=message;
 }
-function start(action){
-  active={...action,t:0,duration:{move:.32,turn:.3,attack:.48,defend:1.1,roll:.5}[action.type],sx:player.x,sy:player.y,sa:player.angle};
-  if(action.type==='move'||action.type==='roll'){
-    const d=directions[action.type==='move'?action.dir:player.dir];
-    const length=action.type==='roll'?STEP*2:STEP;
-    active.tx=clamp(player.x+d[0]*length,CELL.minX,CELL.maxX);active.ty=clamp(player.y+d[1]*length,CELL.minY,CELL.maxY);
+function submit(actor,text){
+  try {
+    const actions=parseCommands(text);
+    if(actor.queue.length+actions.length+(actor.active?1:0)>100) throw new Error('대기 중인 동작이 많아요. 잠시 뒤 다시 입력해 주세요.');
+    actor.queue.push(...actions);
+    setFeedback(actor,`${actions.length}개 동작을 추가했어요. 순서대로 실행합니다.`);
+    actor.input.value='';
+  } catch(error){setFeedback(actor,error.message,true);}
+}
+for(const actor of actors){
+  document.getElementById(`${actor.id}-command-form`).addEventListener('submit',event=>{
+    event.preventDefault();submit(actor,actor.input.value);
+  });
+  actor.input.addEventListener('keydown',event=>{
+    if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){
+      event.preventDefault();submit(actor,actor.input.value);
+    }
+  });
+}
+document.getElementById('reset').addEventListener('click',()=>{
+  for(const actor of actors){
+    Object.assign(actor,starts[actor.id]);actor.queue=[];actor.active=null;actor.input.value='';
+    setFeedback(actor,'훈련장을 초기화했어요. 새로운 명령을 입력해 주세요.');
+    updateStatus(actor);
   }
-  if(action.type==='turn'){player.dir=(player.dir+action.dir+4)%4;active.ta=player.angle+action.dir*Math.PI/2;}
-  updateStatus();
+});
+function updateStatus(actor){
+  const id=actor.id;
+  document.getElementById(`${id}-state`).textContent=actor.active?actionNames[actor.active.type]:'대기 중';
+  document.getElementById(`${id}-pos-x`).textContent=((actor.x-480)/STEP).toFixed(1);
+  document.getElementById(`${id}-pos-y`).textContent=((350-actor.y)/STEP).toFixed(1);
+  document.getElementById(`${id}-facing`).textContent=names[actor.dir];
 }
-function finish(){
-  count++;
-  if(count===1) history.innerHTML='';
-  const li=document.createElement('li');const label=document.createElement('span');const time=document.createElement('time');
-  label.textContent=`✓ ${active.label}`;time.textContent=new Date().toLocaleTimeString('ko-KR',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  li.append(label,time);history.prepend(li);while(history.children.length>20)history.lastChild.remove();
-  document.getElementById('count').textContent=`${count} ACTIONS`;active=null;
-  if(!queue.length){feedback.className='';feedback.textContent='모든 동작을 마쳤어요. 다음 명령을 입력해 주세요.';}
-  updateStatus();
+function start(actor,action){
+  const active={...action,t:0,duration:{move:.32,turn:.3,attack:.48,defend:1.1,roll:.5}[action.type],sx:actor.x,sy:actor.y,sa:actor.angle};
+  actor.active=active;
+  if(action.type==='move'||action.type==='roll'){
+    const d=directions[action.type==='move'?action.dir:actor.dir];
+    active.tx=clamp(actor.x+d[0]*STEP,CELL.minX,CELL.maxX);
+    active.ty=clamp(actor.y+d[1]*STEP,CELL.minY,CELL.maxY);
+    const other=actors.find(candidate=>candidate!==actor);
+    const occupied=Math.abs(other.x-active.tx)<STEP/2&&Math.abs(other.y-active.ty)<STEP/2;
+    const reserved=other.active&&(other.active.type==='move'||other.active.type==='roll')&&
+      other.active.tx===active.tx&&other.active.ty===active.ty;
+    if(occupied||reserved){
+      active.tx=actor.x;active.ty=actor.y;active.blocked=true;
+      setFeedback(actor,'다른 캐릭터가 있는 칸으로는 이동할 수 없어요.',true);
+    }
+  }
+  if(action.type==='turn'){
+    actor.dir=(actor.dir+action.dir+4)%4;
+    active.ta=actor.angle+action.dir*Math.PI/2;
+  }
+  updateStatus(actor);
+}
+function finish(actor){
+  const blocked=actor.active.blocked;
+  actor.active=null;
+  if(!actor.queue.length&&!blocked)setFeedback(actor,'모든 동작을 마쳤어요. 다음 명령을 입력해 주세요.');
+  updateStatus(actor);
 }
 function ellipse(x,y,rx,ry,color){ctx.fillStyle=color;ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);ctx.fill();}
 function roundRect(x,y,w,h,r,fill){ctx.fillStyle=fill;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill();}
@@ -108,41 +135,54 @@ function drawMap(){
  for(let i=0;i<36;i++){const x=(i*139+54)%940,y=i%2?24+(i*7)%30:654+(i*5)%30;ctx.strokeStyle='#b2c59e';ctx.beginPath();ctx.moveTo(x-3,y-3);ctx.lineTo(x,y+4);ctx.lineTo(x+4,y-5);ctx.stroke();}
  ctx.fillStyle='#8ba078';ctx.font='9px monospace';ctx.textAlign='center';ctx.fillText('N',480,72);ctx.fillText('S',480,640);ctx.fillText('W',79,354);ctx.fillText('E',881,354);
 }
-function drawPlayer(){
+function drawCharacter(actor){
+ const {x,y,angle,active,id}=actor;
+ const enemy=id==='enemy';
+ const palette=enemy?
+  {shadow:'#c9baa9',body:'#9c665e',coat:'#bd8174',boots:'#68494a',hat:'#754c4d',trim:'#e5b79e',trail:'157,91,84',label:'#9c665e',shield:'#d69e90'}:
+  {shadow:'#b5c5a4',body:'#577665',coat:'#77917b',boots:'#405849',hat:'#405b4d',trim:'#b7ce8d',trail:'103,134,85',label:'#66815a',shield:'#7db4a0'};
  const t=active?Math.min(active.t/active.duration,1):0;
  const rolling=active?.type==='roll';
- if(rolling){for(let i=3;i>0;i--)ellipse(player.x+(active.sx-player.x)*i*.19,player.y+(active.sy-player.y)*i*.19,16-i*2,16-i*2,`rgba(103,134,85,${.13-i*.025})`);}
- ellipse(player.x,player.y+16,24,10,'#b5c5a4');
- ctx.save();ctx.translate(player.x,player.y);ctx.rotate(player.angle);
+ if(rolling){for(let i=3;i>0;i--)ellipse(x+(active.sx-x)*i*.19,y+(active.sy-y)*i*.19,16-i*2,16-i*2,`rgba(${palette.trail},${.13-i*.025})`);}
+ ellipse(x,y+16,24,10,palette.shadow);
+ ctx.save();ctx.translate(x,y);ctx.rotate(angle);
  if(active?.type==='attack'){
-  ctx.save();ctx.rotate(-1.2+t*2.4);ctx.strokeStyle=`rgba(246,255,222,${Math.sin(t*Math.PI)})`;ctx.lineWidth=16;ctx.beginPath();ctx.arc(0,0,48,-2.4,-.7);ctx.stroke();ctx.strokeStyle='#aecb76';ctx.lineWidth=3;ctx.stroke();ctx.restore();
+  ctx.save();ctx.rotate(-1.2+t*2.4);ctx.strokeStyle=`rgba(246,255,222,${Math.sin(t*Math.PI)})`;ctx.lineWidth=16;ctx.beginPath();ctx.arc(0,0,48,-2.4,-.7);ctx.stroke();ctx.strokeStyle=enemy?'#d5a397':'#aecb76';ctx.lineWidth=3;ctx.stroke();ctx.restore();
  }
  if(active?.type==='defend'){
-  ctx.shadowColor='#a1cebd';ctx.shadowBlur=18;ctx.fillStyle='#c9eee77a';ctx.strokeStyle='#7db4a0';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,35,Math.PI*1.05,Math.PI*1.95);ctx.quadraticCurveTo(0,-15,-34.6,-5.5);ctx.fill();ctx.stroke();ctx.shadowBlur=0;
+  ctx.shadowColor=palette.shield;ctx.shadowBlur=18;ctx.fillStyle=enemy?'#eed2c57a':'#c9eee77a';ctx.strokeStyle=palette.shield;ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,35,Math.PI*1.05,Math.PI*1.95);ctx.quadraticCurveTo(0,-15,-34.6,-5.5);ctx.fill();ctx.stroke();ctx.shadowBlur=0;
  }
  if(rolling){ctx.rotate(t*Math.PI*2);ctx.scale(1,.76);}
- const bob=active?.type==='move'?Math.sin(t*Math.PI*4)*3:Math.sin(elapsed*2)*1;
+ const bob=active?.type==='move'?Math.sin(t*Math.PI*4)*3:Math.sin(elapsed*2+(enemy?1:0))*1;
  ctx.translate(0,bob);
- ellipse(-9,14,6,7,'#405849');ellipse(9,14,6,7,'#405849');
- roundRect(-18,-6,36,28,12,'#577665');roundRect(-13,-8,26,25,10,'#77917b');
+ ellipse(-9,14,6,7,palette.boots);ellipse(9,14,6,7,palette.boots);
+ roundRect(-18,-6,36,28,12,palette.body);roundRect(-13,-8,26,25,10,palette.coat);
  ellipse(-20,4,6,8,'#e1c69e');ellipse(20,4,6,8,'#e1c69e');
  ctx.save();ctx.translate(23,0);if(active?.type==='attack')ctx.rotate(-1.7+t*3.4);
  roundRect(-2,-31,5,34,2,'#eff3db');roundRect(-6,-3,13,4,1,'#a6ac83');roundRect(-1,1,4,9,1,'#6a6347');ctx.restore();
- ellipse(0,-8,16,17,'#ead6ae');ellipse(0,-14,17,12,'#405b4d');roundRect(-17,-16,34,9,5,'#405b4d');
- ctx.fillStyle='#b7ce8d';ctx.beginPath();ctx.moveTo(-5,-21);ctx.lineTo(0,-31);ctx.lineTo(5,-21);ctx.fill();
+ ellipse(0,-8,16,17,'#ead6ae');ellipse(0,-14,17,12,palette.hat);roundRect(-17,-16,34,9,5,palette.hat);
+ ctx.fillStyle=palette.trim;ctx.beginPath();ctx.moveTo(-5,-21);ctx.lineTo(0,-31);ctx.lineTo(5,-21);ctx.fill();
  ctx.restore();
- ctx.textAlign='center';ctx.font='600 9px sans-serif';ctx.fillStyle='#66815a';ctx.fillText('YOU',player.x,player.y-48);
- roundRect(player.x-17,player.y+34,34,4,2,'#c4d1b5');roundRect(player.x-17,player.y+34,34,4,2,'#88a66d');
+ ctx.textAlign='center';ctx.font='600 9px sans-serif';ctx.fillStyle=palette.label;ctx.fillText(enemy?'ENEMY':'YOU',x,y-48);
+ roundRect(x-17,y+34,34,4,2,enemy?'#d4b1a9':'#88a66d');
 }
 function frame(timestamp){
  const dt=Math.min((timestamp-lastTime)/1000||0,.05);lastTime=timestamp;elapsed+=dt;
- if(!active&&queue.length)start(queue.shift());
- if(active){active.t+=dt;const p=clamp(active.t/active.duration,0,1),v=ease(p);
-  if(active.type==='move'||active.type==='roll'){player.x=active.sx+(active.tx-active.sx)*v;player.y=active.sy+(active.ty-active.sy)*v;}
-  if(active.type==='turn')player.angle=active.sa+(active.ta-active.sa)*v;
-  updateStatus();if(p>=1)finish();
+ for(const actor of actors){
+  if(!actor.active&&actor.queue.length) start(actor,actor.queue.shift());
+  const active=actor.active;
+  if(!active) continue;
+  active.t+=dt;const progress=clamp(active.t/active.duration,0,1),v=ease(progress);
+  if(active.type==='move'||active.type==='roll'){
+   actor.x=active.sx+(active.tx-active.sx)*v;
+   actor.y=active.sy+(active.ty-active.sy)*v;
+  }
+  if(active.type==='turn')actor.angle=active.sa+(active.ta-active.sa)*v;
+  updateStatus(actor);if(progress>=1)finish(actor);
  }
- drawMap();drawPlayer();requestAnimationFrame(frame);
+ drawMap();
+ [...actors].sort((a,b)=>a.y-b.y).forEach(drawCharacter);
+ requestAnimationFrame(frame);
 }
-updateStatus();requestAnimationFrame(frame);
+actors.forEach(updateStatus);requestAnimationFrame(frame);
 })();
