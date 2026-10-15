@@ -38,8 +38,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, {"error": "not found"})
             return
         try:
-            length = int(self.headers.get("Content-Length", 0))
-            text = json.loads(self.rfile.read(length) or b"{}").get("text")
+            text = json.loads(self._read_body() or b"{}").get("text")
         except (ValueError, AttributeError):
             text = None
         if not isinstance(text, str) or not text.strip():
@@ -59,6 +58,19 @@ class Handler(BaseHTTPRequestHandler):
             "commandScore": decision.command_score,
             "model": decision.model,
         })
+
+    def _read_body(self):
+        # Java HttpClient(메인 서버)는 본문을 chunked로 보내서 Content-Length가 없어요.
+        if "chunked" in self.headers.get("Transfer-Encoding", "").lower():
+            body = b""
+            while True:
+                size = int(self.rfile.readline().split(b";")[0].strip(), 16)
+                if size == 0:
+                    self.rfile.readline()
+                    return body
+                body += self.rfile.read(size)
+                self.rfile.readline()
+        return self.rfile.read(int(self.headers.get("Content-Length", 0)))
 
     def _send(self, status, body):
         data = json.dumps(body, ensure_ascii=False).encode("utf-8")
