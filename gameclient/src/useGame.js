@@ -99,6 +99,7 @@ export function useGame() {
     setCreds(null);setGame(null);setStatus('lobby');setError('');setBusy(false);
   }
   function toLobby(){save(null);showInvite(null);setCreds(null);setGame(null);setStatus('lobby');setError('');}
-  return {game,status,error,feedback,pending,busy,command,reset,leave,toLobby,
+  const notify=(characterId,message,error=false)=>setFeedback(f=>({...f,[characterId]:{error,message}}));
+  return {game,status,error,feedback,pending,busy,command,reset,leave,toLobby,notify,
     start:mode=>enter(()=>request('/sessions',{method:'POST',body:{mode}})).catch(e=>setError(e.message))};
 }

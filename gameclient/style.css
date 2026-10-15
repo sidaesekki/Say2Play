@@ -29,3 +29,11 @@ button:disabled,textarea:disabled{cursor:not-allowed;opacity:.55}.connection-err
 @media(max-width:740px){.lobby{grid-template-columns:1fr}.invite{min-width:0}}
 /* The textarea is locked with readOnly instead of disabled so it keeps focus while a command is being resolved. */
 textarea[aria-disabled="true"]{cursor:not-allowed;opacity:.55}
+
+/* Voice command toggle. */
+.mic{width:100%;margin:0 0 10px;border:1px dashed #c7d3be;background:#f5f8ee;color:#5d7350;border-radius:8px;padding:9px 12px;font-size:11px;font-weight:600;text-align:left}
+.mic.listening,.mic.starting{border-style:solid;border-color:#9dbb7e;background:#eef5e3}
+.mic.speaking{border-style:solid;border-color:#c0604a;background:#fbece7;color:#a5523e}
+.mic.recognizing{border-style:solid;color:#76865a}
+.enemy-panel .mic{border-color:#e3c7bd;background:#fbf2ee;color:#8b5d53}
+.mic-error{margin:-4px 0 10px}

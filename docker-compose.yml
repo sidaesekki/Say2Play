@@ -1,6 +1,9 @@
 # 세 서비스를 함께 띄운다. 접속: http://localhost:5173
 #   1) cp aiserver/.env.example aiserver/.env 후 TYPESAFE_API_KEY 입력
 #   2) docker compose up --build
+# 음성 명령을 쓰려면 음성 인식 서버를 맥에서 따로 띄운다(MLX라 도커에 넣을 수 없음).
+#   cd aiserver && .venv/bin/uvicorn voice_server:app --port 8002
+#   gameclient의 nginx가 /stt를 host.docker.internal:8002로 넘긴다.
 services:
   aiserver:
     build: ./aiserver
@@ -28,5 +31,7 @@ services:
     build: ./gameclient
     ports:
       - "5173:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - mainserver

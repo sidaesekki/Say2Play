@@ -24,3 +24,16 @@ export function brokerUrl() {
 export const sessionPath = id => `/sessions/${encodeURIComponent(id)}`;
 export const topic = id => `/topic/sessions/${id}`;
 export const inviteUrl = id => { const url = new URL(window.location.href); url.search = `?session=${encodeURIComponent(id)}`; url.hash = ''; return url.href; };
+// Speech-to-text server (aiserver/voice_server.py), proxied under /stt.
+const sttBase = (import.meta.env?.VITE_STT_BASE_URL || '/stt').replace(/\/$/, '');
+export async function sttAvailable() {
+  try { return (await fetch(`${sttBase}/health`, { signal: AbortSignal.timeout(3000) })).ok; } catch { return false; }
+}
+export async function transcribe(wav) {
+  let response;
+  try { response = await fetch(`${sttBase}/v1/stt`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav, signal: AbortSignal.timeout(15000) }); }
+  catch { throw new ApiError('음성 인식 서버에 연결하지 못했습니다.', 'STT_UNAVAILABLE'); }
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new ApiError(response.status === 400 ? (result.detail || '음성 형식이 올바르지 않습니다.') : '음성 인식 서버에 연결하지 못했습니다.', response.status === 400 ? 'STT_BAD_AUDIO' : 'STT_UNAVAILABLE');
+  return result.text || '';
+}

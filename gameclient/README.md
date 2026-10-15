@@ -38,12 +38,30 @@ npm run preview
 - Enter로 전송, Shift+Enter로 줄바꿈합니다. 한국어 조합 중 Enter는 전송하지 않습니다. 실패한 입력은 유지하고 자동 재전송하지 않습니다.
 - 상태바 좌표는 API와 동일한 좌상단 `(0, 0)` 기준입니다.
 
+## 음성 명령
+
+입력창마다 있는 **🎙 음성으로 명령** 버튼을 켜면 마이크로 듣다가, 말을 멈추면(약 0.7초 무음) 그 구간을 텍스트로 바꿔 바로 명령으로 보냅니다. 한 번에 한 캐릭터만 들을 수 있습니다.
+
+- 음성 인식은 aiserver의 `voice_server.py`(Whisper, MLX)가 맡습니다. Apple Silicon 맥에서 직접 띄워야 하며 도커에는 들어 있지 않습니다.
+
+  ```sh
+  cd aiserver
+  .venv/bin/pip install -r requirements-stt.txt   # 처음 한 번
+  .venv/bin/uvicorn voice_server:app --port 8002
+  ```
+
+- 브라우저는 같은 출처의 `/stt`로 요청하고, nginx(도커)와 Vite 개발 서버가 이를 `localhost:8002`로 넘깁니다. 서버가 꺼져 있으면 버튼이 "음성 인식 서버 꺼짐"으로 비활성화되고, 텍스트 입력은 그대로 쓸 수 있습니다.
+- 말소리 구간은 브라우저에서 소리 크기로 감지합니다(`src/vad.js`). 주변 소음 수준을 따라가며 기준을 정하고, 0.25초보다 짧은 소리는 버리며 한 구간은 최대 8초입니다.
+- 인식 결과가 비었거나 Whisper가 무음에서 자주 지어내는 문장("감사합니다." 등)이면 보내지 않습니다. 판이 진행 중이 아닐 때(상대 대기, 판 종료) 감지된 음성은 인식하지 않고 버립니다.
+- 마이크는 `localhost` 또는 HTTPS에서만 쓸 수 있습니다. 같은 네트워크의 다른 기기에서 `http://{IP}:5173`으로 열면 음성 명령은 쓸 수 없습니다.
+
 ## 구성
 
 - `src/main.jsx`: React 화면, 캐릭터 입력 패널, Canvas 생명주기
 - `src/useGame.js`: 로비·참가, STOMP 연결과 복구, 명령·초기화·나가기 처리
 - `src/api.js`: REST 공통 응답·에러 처리, 토큰 헤더, STOMP 주소와 초대 링크
 - `src/state.js`: 서버 상태 복원, 이벤트 적용, 애니메이션 좌표
+- `src/vad.js`, `src/useVoice.js`: 마이크 입력, 말소리 구간 감지, 16kHz WAV 변환
 - `src/renderer.js`: Canvas 지도·캐릭터·동작 렌더링
 - `style.css`: 기존 반응형 스타일
 - `src/*.test.js`: API 계약 및 서버 이벤트·보간 테스트 (Node 내장 테스트 러너)
