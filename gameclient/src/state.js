@@ -1,6 +1,6 @@
 export const labels = { IDLE:'대기 중', MOVING:'이동 중', TURNING:'회전 중', ATTACKING:'공격 중', DEFENDING:'방어 중', ROLLING:'구르는 중' };
 export const facings = { N:'북쪽 ↑', E:'동쪽 →', S:'남쪽 ↓', W:'서쪽 ←' };
-const durations = {move_up:320,move_down:320,move_left:320,move_right:320,turn_left:300,turn_right:300,attack:480,defend:1100,roll:500};
+const durations = {move_forward:320,move_backward:320,turn_left:300,turn_right:300,attack:480,defend:1100,roll:500};
 const kind = type => type.startsWith('move_') ? 'move' : type.startsWith('turn_') ? 'turn' : type;
 const states = {move:'MOVING',turn:'TURNING',attack:'ATTACKING',defend:'DEFENDING',roll:'ROLLING'};
 export function snapshot(data) {

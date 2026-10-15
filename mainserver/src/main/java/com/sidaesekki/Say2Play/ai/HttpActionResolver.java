@@ -25,12 +25,12 @@ import org.springframework.web.client.RestClientException;
  * POST {base-url}/v1/decide
  * Content-Type: application/json
  *
- * { "text": "오른쪽으로 한 발짝 가볼까" }
+ * { "text": "앞으로 가" }
  *
  * 200 OK
  * {
- *   "choice": "move_right",
- *   "probabilities": { "move_right": 0.93, ... },
+ *   "choice": "move_forward",
+ *   "probabilities": { "move_forward": 0.93, ... },
  *   "confidence": 0.88,
  *   "isCommand": true,
  *   "commandScore": 0.81,

@@ -45,11 +45,11 @@ class HttpActionResolverTest {
     @Test
     void choice를_ActionType으로_바꾼다() {
         handler.set(exchange -> respond(exchange, 200,
-                "{\"choice\":\"move_right\",\"probabilities\":{\"move_right\":0.9},\"confidence\":0.8,"
+                "{\"choice\":\"move_forward\",\"probabilities\":{\"move_forward\":0.9},\"confidence\":0.8,"
                         + "\"isCommand\":true,\"commandScore\":0.7,\"model\":\"jev-1.13.0\"}"));
 
-        assertThat(resolver().resolve("오른쪽으로 가")).isEqualTo(ActionType.MOVE_RIGHT);
-        assertThat(receivedBody.get()).isEqualTo("{\"text\":\"오른쪽으로 가\"}");
+        assertThat(resolver().resolve("앞으로 가")).isEqualTo(ActionType.MOVE_FORWARD);
+        assertThat(receivedBody.get()).isEqualTo("{\"text\":\"앞으로 가\"}");
     }
 
     @Test

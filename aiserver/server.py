@@ -2,8 +2,8 @@
 
 스펙은 실제 스펙이 정해지기 전까지 쓰는 임시 스펙이에요(mainserver의 HttpActionResolver와 같아요).
 
-    POST /v1/decide   {"text": "위로 가"}
-    200 {"choice": "move_up", "probabilities": {...}, "confidence": 0.9,
+    POST /v1/decide   {"text": "앞으로 가"}
+    200 {"choice": "move_forward", "probabilities": {...}, "confidence": 0.9,
          "isCommand": true, "commandScore": 0.8, "model": "jev-1.13.0"}
     400 text가 없거나 비었을 때
     502 Jev 호출에 실패했을 때

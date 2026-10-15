@@ -6,12 +6,12 @@
     with JevClient() as jev:
         decision = jev.decide("위로 올라가서 공격해")
 
-    decision.probabilities  # {"move_up": 0.75, "attack": 0.25, ...} 합이 1
-    decision.choice         # "move_up" (확률이 가장 높은 행동)
+    decision.probabilities  # {"move_forward": 0.75, "attack": 0.25, ...} 합이 1
+    decision.choice         # "move_forward" (확률이 가장 높은 행동)
     decision.is_command     # False면 행동을 시키는 말이 아니에요 (예: "오늘 날씨 좋다")
 
 명령줄에서 바로 확인 (aiserver 폴더에서):
-    .venv/bin/python jev_client.py "위로 가" "오늘 날씨 좋다"
+    .venv/bin/python jev_client.py "앞으로 가" "오늘 날씨 좋다"
 """
 
 import json

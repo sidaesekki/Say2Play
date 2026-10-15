@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { snapshot, applyEvent, visualActor } from './state.js';
 const character={id:'player',type:'PLAYER',x:6,y:7,facing:'N',state:'IDLE'};
 const initial=()=>snapshot({session:{id:'session',status:'PLAYING',mapCols:13,mapRows:9},characters:[character]});
-const action={id:'a',seq:1,actionType:'move_up',status:'RUNNING',startedAt:new Date(1000).toISOString()};
+const action={id:'a',seq:1,actionType:'move_forward',status:'RUNNING',startedAt:new Date(1000).toISOString()};
 const start={type:'ACTION_STARTED',data:{characterId:'player',action,from:{x:6,y:7,facing:'N'},to:{x:6,y:6,facing:'N'},durationMs:320}};
 test('server movement interpolates without completing or advancing the local queue',()=>{
  const game=applyEvent(initial(),start);

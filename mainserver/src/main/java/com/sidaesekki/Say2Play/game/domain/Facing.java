@@ -27,4 +27,8 @@ public enum Facing {
     public Facing turnLeft() {
         return values()[(ordinal() + 3) % 4];
     }
+
+    public Facing opposite() {
+        return values()[(ordinal() + 2) % 4];
+    }
 }

@@ -18,10 +18,8 @@ public class FakeActionResolver implements ActionResolver {
     private static final List<Rule> RULES = List.of(
             new Rule("(왼|좌|left).*" + TURN + "|turnleft|좌회전", ActionType.TURN_LEFT),
             new Rule("(오른|우|right).*" + TURN + "|turnright|우회전", ActionType.TURN_RIGHT),
-            new Rule("위로|위쪽|올라|북쪽|^위$|up", ActionType.MOVE_UP),
-            new Rule("아래|밑으로|내려|남쪽|down", ActionType.MOVE_DOWN),
-            new Rule("왼|좌측|좌로|서쪽|left", ActionType.MOVE_LEFT),
-            new Rule("오른|우측|우로|동쪽|right", ActionType.MOVE_RIGHT),
+            new Rule("앞으로|앞쪽|전진|나아가|forward", ActionType.MOVE_FORWARD),
+            new Rule("뒤로|뒤쪽|후진|물러|backward", ActionType.MOVE_BACKWARD),
             new Rule("구르|굴러|굴려|회피|피하|roll|dodge", ActionType.ROLL),
             new Rule("방어|막아|막기|가드|block|defend|guard", ActionType.DEFEND),
             new Rule("공격|때려|때리|베어|찔러|돌격|attack|hit|strike|charge", ActionType.ATTACK));
