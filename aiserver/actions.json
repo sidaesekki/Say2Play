@@ -1,0 +1,14 @@
+{
+  "instructions": "Which action should the character in a top-down game perform in response to the player's command?",
+  "actions": {
+    "move_up": "Move up, toward the top of the screen",
+    "move_down": "Move down, toward the bottom of the screen",
+    "move_left": "Move left, toward the left side of the screen",
+    "move_right": "Move right, toward the right side of the screen",
+    "turn_left": "Turn in place to face left (counterclockwise) without moving",
+    "turn_right": "Turn in place to face right (clockwise) without moving",
+    "attack": "Attack, hit, strike, or charge at an enemy",
+    "defend": "Block or guard against an attack",
+    "roll": "Roll or dodge out of the way of an incoming attack"
+  }
+}
