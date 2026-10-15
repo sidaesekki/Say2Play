@@ -18,6 +18,7 @@ public class GameSession {
     public static final int MAP_COLS = 13;
     public static final int MAP_ROWS = 9;
     public static final int MAX_QUEUE_LENGTH = 100;
+    public static final int ATTACK_DAMAGE = 10;
 
     private final UUID id;
     private final Instant createdAt;
@@ -42,14 +43,17 @@ public class GameSession {
         return characters.stream().filter(character -> character.getType() == type).findFirst().orElseThrow();
     }
 
-    public void checkQueueCapacity(GameCharacter character) {
+    public void checkCanEnqueue(GameCharacter character) {
+        if (character.isDead()) {
+            throw new GameException(ErrorCode.CHARACTER_DEAD);
+        }
         if (character.queueLength() >= MAX_QUEUE_LENGTH) {
             throw new GameException(ErrorCode.QUEUE_FULL);
         }
     }
 
     public QueuedAction enqueue(GameCharacter character, ActionType actionType, Instant now) {
-        checkQueueCapacity(character);
+        checkCanEnqueue(character);
         lastActiveAt = now;
         return character.enqueue(actionType, now);
     }
@@ -85,12 +89,40 @@ public class GameSession {
     /**
      * 실행 중인 동작이 {@code actionId}일 때만 완료 처리한다.
      * 초기화 등으로 이미 사라진 동작의 완료 예약이 늦게 도착하면 empty를 돌려준다.
+     * 공격이 끝나면 이 시점에 적중을 판정한다(erd.md "공격 판정 규칙").
      */
-    public Optional<QueuedAction> finish(GameCharacter character, UUID actionId, Instant now) {
+    public Optional<FinishResult> finish(GameCharacter character, UUID actionId, Instant now) {
         Optional<QueuedAction> running = character.runningAction()
                 .filter(action -> action.getId().equals(actionId));
-        running.ifPresent(action -> character.complete(action, now));
-        return running;
+        if (running.isEmpty()) {
+            return Optional.empty();
+        }
+        QueuedAction action = running.get();
+        character.complete(action, now);
+        AttackHit hit = action.getActionType() == ActionType.ATTACK ? resolveAttack(character, now) : null;
+        return Optional.of(new FinishResult(action, hit));
+    }
+
+    // 공격자 바로 앞 칸에 살아 있는 상대가 있으면 적중. 상대가 공격자를 마주 보고 방어 중이면 피해 0.
+    private AttackHit resolveAttack(GameCharacter attacker, Instant now) {
+        int x = attacker.getX() + attacker.getFacing().dx();
+        int y = attacker.getY() + attacker.getFacing().dy();
+        return characters.stream()
+                .filter(target -> target != attacker && !target.isDead())
+                .filter(target -> target.getX() == x && target.getY() == y)
+                .findFirst()
+                .map(target -> {
+                    boolean defended = target.runningAction()
+                            .filter(action -> action.getActionType() == ActionType.DEFEND)
+                            .isPresent()
+                            && target.getFacing() == attacker.getFacing().opposite();
+                    int damage = defended ? 0 : ATTACK_DAMAGE;
+                    if (damage > 0) {
+                        target.takeDamage(damage, now);
+                    }
+                    return new AttackHit(target, damage, defended);
+                })
+                .orElse(null);
     }
 
     public void reset(Instant now) {
@@ -150,5 +182,17 @@ public class GameSession {
 
     public Instant getLastActiveAt() {
         return lastActiveAt;
+    }
+
+    /** 완료된 동작과, 공격이 적중했으면 그 결과. */
+    public record FinishResult(QueuedAction action, AttackHit hit) {
+
+        public Optional<AttackHit> attackHit() {
+            return Optional.ofNullable(hit);
+        }
+    }
+
+    /** {@code defended}면 상대가 막아서 {@code damage}가 0이다. */
+    public record AttackHit(GameCharacter target, int damage, boolean defended) {
     }
 }

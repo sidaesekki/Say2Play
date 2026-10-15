@@ -75,7 +75,7 @@ public class GameSessionService {
             checkPlaying(session);
             character = session.findCharacter(characterId)
                     .orElseThrow(() -> new GameException(ErrorCode.CHARACTER_NOT_FOUND));
-            session.checkQueueCapacity(character);
+            session.checkCanEnqueue(character);
         }
 
         ActionType actionType = actionResolver.resolve(trimmed);

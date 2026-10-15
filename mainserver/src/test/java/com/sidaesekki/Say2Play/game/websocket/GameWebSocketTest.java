@@ -10,6 +10,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.WebSocket;
 import java.net.http.WebSocketHandshakeException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletionException;
@@ -102,6 +104,45 @@ class GameWebSocketTest {
 
         // 초기화로 취소된 방어 동작의 완료 이벤트는 오지 않는다.
         assertThat(messages.poll(1500, TimeUnit.MILLISECONDS)).isNull();
+    }
+
+    @Test
+    void 공격이_적중하면_ATTACK_HIT를_보내고_HP가_0이면_쓰러진다() throws Exception {
+        for (int i = 0; i < 5; i++) {
+            command(playerId, "앞으로 가");
+        }
+        for (int i = 0; i < 10; i++) {
+            command(playerId, "공격");
+        }
+
+        List<String> hits = new ArrayList<>();
+        String lastHit = null;
+        while (lastHit == null || (Integer) JsonPath.read(lastHit, "$.data.target.hp") > 0) {
+            String message = messages.poll(5, TimeUnit.SECONDS);
+            assertThat(message).as("WebSocket message").isNotNull();
+            if ("ATTACK_HIT".equals(JsonPath.read(message, "$.type"))) {
+                hits.add(message);
+                lastHit = message;
+            }
+        }
+
+        assertThat(hits).hasSize(10);
+        String first = hits.getFirst();
+        assertThat((String) JsonPath.read(first, "$.data.attackerId")).isEqualTo(playerId);
+        assertThat((String) JsonPath.read(first, "$.data.target.id")).isEqualTo(enemyId);
+        assertThat((Integer) JsonPath.read(first, "$.data.damage")).isEqualTo(10);
+        assertThat((Boolean) JsonPath.read(first, "$.data.defended")).isFalse();
+        assertThat((Integer) JsonPath.read(first, "$.data.target.hp")).isEqualTo(90);
+        assertThat((String) JsonPath.read(lastHit, "$.data.target.state")).isEqualTo("DEAD");
+
+        HttpResponse<String> dead = send("POST",
+                "/api/v1/sessions/" + sessionId + "/characters/" + enemyId + "/commands", "{\"text\":\"공격\"}");
+        assertThat(dead.statusCode()).isEqualTo(409);
+        assertThat((String) JsonPath.read(dead.body(), "$.error.code")).isEqualTo("CHARACTER_DEAD");
+
+        String reset = send("POST", "/api/v1/sessions/" + sessionId + "/reset", null).body();
+        assertThat((Integer) JsonPath.read(reset, "$.data.characters[1].hp")).isEqualTo(100);
+        assertThat((String) JsonPath.read(reset, "$.data.characters[1].state")).isEqualTo("IDLE");
     }
 
     @Test

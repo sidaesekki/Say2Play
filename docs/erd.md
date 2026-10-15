@@ -44,6 +44,7 @@ erDiagram
         int y
         enum facing
         enum state
+        int hp
         timestamp created_at
         timestamp updated_at
     }
@@ -90,7 +91,8 @@ erDiagram
 | x | int | NOT NULL | 확정된 그리드 열 좌표 (0 ~ map_cols-1). 이동 동작이 끝날 때 갱신 |
 | y | int | NOT NULL | 확정된 그리드 행 좌표 (0 ~ map_rows-1). 이동 동작이 끝날 때 갱신 |
 | facing | enum | NOT NULL | 바라보는 방향 (`N`, `E`, `S`, `W`) |
-| state | enum | NOT NULL, DEFAULT 'IDLE' | 현재 동작 (`IDLE`, `MOVING`, `TURNING`, `ATTACKING`, `DEFENDING`, `ROLLING`) |
+| state | enum | NOT NULL, DEFAULT 'IDLE' | 현재 동작 (`IDLE`, `MOVING`, `TURNING`, `ATTACKING`, `DEFENDING`, `ROLLING`, `DEAD`). `DEAD`는 HP가 0이 되어 쓰러진 상태 |
+| hp | int | NOT NULL, DEFAULT 100 | 체력 (0 ~ 100). 공격에 맞을 때 갱신 (→ 4. 공격 판정 규칙) |
 | created_at | timestamp | NOT NULL | 생성 시점 |
 | updated_at | timestamp | NOT NULL | 최근 상태 변경 시점 |
 
@@ -132,8 +134,8 @@ erDiagram
 | move_backward | 0.32 | `MOVING` | 바라보는 반대 방향으로 1칸 이동. facing은 유지 |
 | turn_left | 0.30 | `TURNING` | 제자리에서 반시계 방향으로 90도 회전 |
 | turn_right | 0.30 | `TURNING` | 제자리에서 시계 방향으로 90도 회전 |
-| attack | 0.48 | `ATTACKING` | facing 방향으로 공격 (v1은 피해 판정 없음) |
-| defend | 1.10 | `DEFENDING` | facing 방향으로 방어 (v1은 피해 판정 없음) |
+| attack | 0.48 | `ATTACKING` | facing 방향 바로 앞 칸을 공격. 끝날 때 적중 판정 (→ 공격 판정 규칙) |
+| defend | 1.10 | `DEFENDING` | facing 방향으로 방어. 마주 보는 공격자의 피해를 막음 (→ 공격 판정 규칙) |
 | roll | 0.50 | `ROLLING` | facing 방향으로 1칸 이동 |
 
 - 입력 1건은 Action 1개로만 매칭되고 1회 실행된다. 반복(예: "앞으로 3칸")이나 연결(예: "앞으로 가서 공격")도 가장 비슷한 Action 1개로 처리된다.
@@ -146,6 +148,17 @@ erDiagram
   - 다른 캐릭터가 이동 중인 목표 칸(`RUNNING` 동작의 `target_x`, `target_y`)
 - 막히더라도 동작 시간은 그대로 소요된다.
 
+### 공격 판정 규칙 (attack)
+
+- 공격 동작이 **끝나는 시점**에 판정한다. 공격자의 확정 좌표에서 facing 방향 바로 앞 칸(1칸)에 살아 있는 상대가 있으면 적중이다.
+  - 공격 도중 상대가 이동이나 구르기로 그 칸을 벗어나면 빗나간다. 이동 중인 상대는 이동이 끝나기 전까지 원래 칸에 있는 것으로 본다.
+- 적중하면 상대의 `hp`가 10 줄어든다. `hp`는 0 아래로 내려가지 않는다.
+- 상대가 `defend`를 실행 중(`RUNNING`)이고 공격자를 마주 보고 있으면(상대 facing이 공격자 facing의 반대) 막은 것으로 보고 피해는 0이다. 옆이나 뒤에서 맞으면 막지 못한다.
+- `hp`가 0이 되면 `state`가 `DEAD`가 되고, 실행 중인 동작을 포함해 그 캐릭터의 큐를 모두 비운다.
+  - `DEAD` 캐릭터는 명령을 받지 않는다. 더 이상 맞지 않지만, 그 칸은 계속 막힌 칸으로 취급한다.
+  - 세션은 끝나지 않는다. 초기화하면 두 캐릭터 모두 `hp` 100, `IDLE`로 돌아온다.
+- 빗나가면 아무 일도 없고, 동작 시간은 그대로 소요된다.
+
 ### AI 호출 규칙
 
 - 메인서버는 aiserver를 HTTP로 호출한다. 입력 1건당 aiserver는 Jev API를 1번 호출한다.
@@ -155,9 +168,9 @@ erDiagram
 
 ### CHARACTER_START: 캐릭터 시작 상태
 
-| type | x | y | facing |
-| --- | --- | --- | --- |
-| PLAYER | 6 | 7 | `N` |
-| ENEMY | 6 | 1 | `S` |
+| type | x | y | facing | hp |
+| --- | --- | --- | --- | --- |
+| PLAYER | 6 | 7 | `N` | 100 |
+| ENEMY | 6 | 1 | `S` | 100 |
 
 - 좌표는 좌상단이 `(0, 0)`이고, 오른쪽이 `x+`, 아래쪽이 `y+`다.

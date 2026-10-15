@@ -15,11 +15,12 @@ public record CharacterDetailResponse(
         int y,
         Facing facing,
         CharacterState state,
+        int hp,
         List<ActionResponse> queue) {
 
     public static CharacterDetailResponse from(GameCharacter character) {
         return new CharacterDetailResponse(character.getId(), character.getType(), character.getX(),
-                character.getY(), character.getFacing(), character.getState(),
+                character.getY(), character.getFacing(), character.getState(), character.getHp(),
                 character.getQueue().stream().map(ActionResponse::from).toList());
     }
 }

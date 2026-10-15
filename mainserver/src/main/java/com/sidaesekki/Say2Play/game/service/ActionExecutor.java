@@ -55,9 +55,12 @@ public class ActionExecutor {
                 return;
             }
             GameCharacter character = session.findCharacter(characterId).orElseThrow();
-            session.finish(character, actionId, clock.instant()).ifPresent(action -> {
+            session.finish(character, actionId, clock.instant()).ifPresent(result -> {
                 publisher.publish(sessionId, GameEventType.ACTION_FINISHED, new GameEvent.ActionFinished(
-                        action.getId(), CharacterResponse.from(character), character.queueLength()));
+                        actionId, CharacterResponse.from(character), character.queueLength()));
+                result.attackHit().ifPresent(hit -> publisher.publish(sessionId, GameEventType.ATTACK_HIT,
+                        new GameEvent.AttackHit(characterId, actionId, CharacterResponse.from(hit.target()),
+                                hit.damage(), hit.defended())));
                 startIfIdle(session, character);
             });
         }

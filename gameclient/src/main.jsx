@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useGame } from './useGame.js';
 import { createRenderer } from './renderer.js';
-import { facings, labels } from './state.js';
+import { facings, labels, MAX_HP } from './state.js';
 import '../style.css';
 function Arena({game}) {
   const canvas=useRef(null), latest=useRef(game);
@@ -17,8 +17,9 @@ function Arena({game}) {
 function CommandPanel({character,type,index,client}) {
   const [text,setText]=useState('');
   const enemy=type==='ENEMY', name=enemy?'적':'플레이어';
-  const disabled=client.status!=='connected'||client.busy||!character||client.pending[character?.id];
-  const feedback=client.feedback[character?.id];
+  const dead=character?.state==='DEAD';
+  const disabled=client.status!=='connected'||client.busy||!character||dead||client.pending[character?.id];
+  const feedback=dead?{error:true,message:`${enemy?'적이':'플레이어가'} 쓰러졌어요. 초기화하면 다시 시작합니다.`}:client.feedback[character?.id];
   async function submit(e){e.preventDefault();if(!disabled&&await client.command(character.id,text))setText('');}
   return <section className={`command-panel ${enemy?'enemy-panel':''}`} aria-label={`${name} 명령`}>
     <div className="section-title"><span className="number">0{index+1}</span><h2>{name} 명령</h2><span className="keyboard">↵</span></div>
@@ -35,13 +36,14 @@ function CommandPanel({character,type,index,client}) {
 function App(){
  const client=useGame();const {game,status,error,busy,pending}=client;
  const connected=status==='connected';
+ const loser=game?.characters.find(c=>c.state==='DEAD'), winner=loser&&game.characters.find(c=>c.id!==loser.id);
  return <><header><a className="brand" href="./"><span className="brand-icon">S<span>↗</span></span>Say2Play<span className="tag">PLAYGROUND</span></a><span className="connection"><i/>{({connected:'서버 연결됨',connecting:'서버 연결 중',reconnecting:'다시 연결 중',ended:'게임 종료',error:'연결 실패'})[status]}</span></header>
  <main><section className="intro"><div><p className="eyebrow">YOUR WORDS. YOUR MOVES.</p><h1>한 줄의 명령, 하나의 모험.</h1><p className="subtitle">두 캐릭터의 움직임을 각각 입력해 보세요. 당신의 말이 플레이가 됩니다.</p></div><span className="version">01 / TRAINING GROUND</span></section>
  {error&&<p className="connection-error" role="alert">{error}</p>}
  {(status==='error'||status==='ended')&&<button className="session-button" onClick={client.retry}>{status==='ended'?'새 게임 시작':'다시 연결'}</button>}
  <div className="workspace"><section className="arena-panel" aria-label="게임 화면"><div className="panel-heading"><span><i className="live-dot"/> 자유 훈련장</span><span className="quiet">TOP-DOWN SANDBOX</span></div>
- <div className="canvas-wrap"><Arena game={game}/><div className="map-label"><span>SECTOR 01</span><small>THE QUIET GARDEN</small></div><div className="map-help">{game?'플레이어와 적에게 각각 명령을 내려 보세요':'서버에 연결하면 훈련장이 표시됩니다.'}</div><button className="reset" disabled={!connected||busy||Object.keys(pending).length>0} onClick={client.reset}>↺ 초기화</button></div>
- <div className="statusbar">{game?.characters.map(c=><div key={c.id} className={`actor-status ${c.type==='ENEMY'?'enemy-status':''}`}><span className="actor-name"><span className="avatar-dot"/>{c.type} 01 <b className="state">{labels[c.state]}</b></span><span className="coordinates">X <b>{c.x}</b><em>/</em> Y <b>{c.y}</b><em>/</em><b>{facings[c.facing]}</b></span></div>)}</div></section>
+ <div className="canvas-wrap"><Arena game={game}/><div className="map-label"><span>SECTOR 01</span><small>THE QUIET GARDEN</small></div><div className="map-help">{game?'플레이어와 적에게 각각 명령을 내려 보세요':'서버에 연결하면 훈련장이 표시됩니다.'}</div>{winner&&<div className="result-banner" role="status"><b>{winner.type==='PLAYER'?'플레이어':'적'} 승리!</b><span>↺ 초기화로 다시 시작하세요</span></div>}<button className="reset" disabled={!connected||busy||Object.keys(pending).length>0} onClick={client.reset}>↺ 초기화</button></div>
+ <div className="statusbar">{game?.characters.map(c=><div key={c.id} className={`actor-status ${c.type==='ENEMY'?'enemy-status':''}`}><span className="actor-name"><span className="avatar-dot"/>{c.type} 01 <b className="state">{labels[c.state]}</b></span><span className="hp" aria-label={`HP ${c.hp??MAX_HP} / ${MAX_HP}`}>HP <i className="hp-bar"><i style={{width:`${(c.hp??MAX_HP)/MAX_HP*100}%`}}/></i><b>{c.hp??MAX_HP}</b></span><span className="coordinates">X <b>{c.x}</b><em>/</em> Y <b>{c.y}</b><em>/</em><b>{facings[c.facing]}</b></span></div>)}</div></section>
  <aside>{['PLAYER','ENEMY'].map((type,index)=><CommandPanel key={`${game?.session.id}-${type}`} type={type} index={index} character={game?.characters.find(c=>c.type===type)} client={client}/>)}</aside></div>
  <footer><span><i/> TWO CHARACTERS. YOUR COMMANDS.</span><button className="session-button" disabled={!connected||busy||Object.keys(pending).length>0} onClick={client.leave}>게임 나가기</button></footer></main></>;
 }

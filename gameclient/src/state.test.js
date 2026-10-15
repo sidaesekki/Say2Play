@@ -35,3 +35,18 @@ test('reset and ended events clear active animations and queues',()=>{
  const ended=applyEvent(game,{type:'SESSION_ENDED',data:{reason:'EXPIRED'}});
  assert.equal(ended.session.status,'ENDED');assert.equal(ended.characters[0].animation,null);
 });
+test('attack hit lowers target HP without interrupting its animation',()=>{
+ const game=applyEvent(initial(),start);
+ const hit=applyEvent(game,{type:'ATTACK_HIT',data:{attackerId:'enemy',actionId:'x',target:{...character,hp:90,state:'MOVING'},damage:10,defended:false}});
+ const c=hit.characters[0];
+ assert.equal(c.hp,90);assert.equal(c.state,'MOVING');assert.notEqual(c.animation,null);assert.equal(c.queue.length,1);
+ assert.equal(c.hit.damage,10);assert.equal(c.hit.defended,false);
+ assert.equal(visualActor(c,1160,{x:0,y:0},10).hp,90);
+});
+test('knockout marks the target dead and drops its queue and animation',()=>{
+ const game=applyEvent(initial(),start);
+ const ko=applyEvent(game,{type:'ATTACK_HIT',data:{attackerId:'enemy',actionId:'x',target:{...character,hp:0,state:'DEAD'},damage:10,defended:false}});
+ const c=ko.characters[0];
+ assert.equal(c.hp,0);assert.equal(c.state,'DEAD');assert.equal(c.animation,null);assert.deepEqual(c.queue,[]);
+ assert.equal(visualActor(c,1160,{x:0,y:0},10).dead,true);
+});

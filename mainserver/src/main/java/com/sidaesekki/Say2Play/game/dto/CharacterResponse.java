@@ -6,10 +6,11 @@ import com.sidaesekki.Say2Play.game.domain.Facing;
 import com.sidaesekki.Say2Play.game.domain.GameCharacter;
 import java.util.UUID;
 
-public record CharacterResponse(UUID id, CharacterType type, int x, int y, Facing facing, CharacterState state) {
+public record CharacterResponse(UUID id, CharacterType type, int x, int y, Facing facing, CharacterState state,
+                                int hp) {
 
     public static CharacterResponse from(GameCharacter character) {
         return new CharacterResponse(character.getId(), character.getType(), character.getX(), character.getY(),
-                character.getFacing(), character.getState());
+                character.getFacing(), character.getState(), character.getHp());
     }
 }

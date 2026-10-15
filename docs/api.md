@@ -70,7 +70,8 @@
         "x": 6,
         "y": 7,
         "facing": "N",
-        "state": "IDLE"
+        "state": "IDLE",
+        "hp": 100
       },
       {
         "id": "b9d5f3c2-6a4e-4f8b-87da-2e3f4a5b6c7d",
@@ -78,7 +79,8 @@
         "x": 6,
         "y": 1,
         "facing": "S",
-        "state": "IDLE"
+        "state": "IDLE",
+        "hp": 100
       }
     ]
   }
@@ -127,6 +129,7 @@
         "y": 6,
         "facing": "N",
         "state": "ATTACKING",
+        "hp": 100,
         "queue": [
           {
             "id": "c1d2e3f4-0000-4a1b-8c2d-3e4f5a6b7c8d",
@@ -157,6 +160,7 @@
         "y": 1,
         "facing": "S",
         "state": "IDLE",
+        "hp": 100,
         "queue": []
       }
     ]
@@ -235,6 +239,7 @@
 | `400` | `VALIDATION_ERROR` | `text`가 없거나, 공백만 있거나, 500자를 넘음 |
 | `404` | `CHARACTER_NOT_FOUND` | `characterId`가 이 세션의 캐릭터가 아님 |
 | `409` | `SESSION_ENDED` | 이미 종료된 세션 |
+| `409` | `CHARACTER_DEAD` | HP가 0이 되어 쓰러진 캐릭터 (초기화해야 다시 명령 가능) |
 | `429` | `QUEUE_FULL` | 실행 중인 동작을 포함해 해당 캐릭터의 큐가 100개로 가득 참 |
 | `502` | `AI_UNAVAILABLE` | aiserver 호출에 실패함 (연결 실패, 5xx 응답, Action Set에 없는 값 반환) |
 | `504` | `AI_TIMEOUT` | aiserver가 5초 안에 응답하지 않음 |
@@ -270,6 +275,7 @@
         "y": 7,
         "facing": "N",
         "state": "IDLE",
+        "hp": 100,
         "queue": []
       },
       {
@@ -279,6 +285,7 @@
         "y": 1,
         "facing": "S",
         "state": "IDLE",
+        "hp": 100,
         "queue": []
       }
     ]
@@ -348,6 +355,7 @@
 | --- | --- | --- |
 | `ACTION_STARTED` | 캐릭터 큐의 동작 실행이 시작될 때 | 시작 상태(`from`)와 결과 상태(`to`)를 보내고, 클라이언트는 `durationMs` 동안 보간해 애니메이션함 |
 | `ACTION_FINISHED` | 동작 실행이 끝났을 때 | 완료된 동작 ID와 확정된 캐릭터 상태를 보냄 |
+| `ATTACK_HIT` | 공격이 끝나며 상대에게 적중했을 때 | 공격자, 피해량, 방어 여부, 피해가 반영된 상대 상태를 보냄. 공격자의 `ACTION_FINISHED` 바로 뒤에 옴 |
 | `SESSION_RESET` | 초기화했을 때 | 초기화된 두 캐릭터 상태를 보냄 |
 | `SESSION_ENDED` | 세션이 종료되거나 만료됐을 때 | 이벤트 전송 후 서버가 연결을 닫음 |
 
@@ -412,12 +420,41 @@
       "x": 6,
       "y": 5,
       "facing": "N",
-      "state": "IDLE"
+      "state": "IDLE",
+      "hp": 100
     },
     "queueLength": 0
   }
 }
 ```
+
+**`ATTACK_HIT` 예시:**
+
+```json
+{
+  "type": "ATTACK_HIT",
+  "data": {
+    "attackerId": "a8c4e2b1-5f3d-4e7a-b6c9-1d2e3f4a5b6c",
+    "actionId": "a5b6c7d8-4444-4e5f-8a6b-7c8d9e0f1a2b",
+    "target": {
+      "id": "b9d5f3c2-6a4e-4f8b-87da-2e3f4a5b6c7d",
+      "type": "ENEMY",
+      "x": 6,
+      "y": 1,
+      "facing": "S",
+      "state": "MOVING",
+      "hp": 90
+    },
+    "damage": 10,
+    "defended": false
+  }
+}
+```
+
+> 적중 판정은 [erd.md](erd.md)의 "공격 판정 규칙"을 따릅니다. 빗나간 공격은 `ATTACK_HIT`를 보내지 않습니다.
+> 상대가 마주 보고 방어 중이었으면 `defended: true`, `damage: 0`이고 `hp`는 그대로입니다.
+> `target`의 `x`, `y`, `facing`은 확정된 값입니다. 상대가 동작 중이면 `state`는 그 동작 그대로이고, 클라이언트는 진행 중인 애니메이션을 유지한 채 `hp`만 반영합니다.
+> `target.state`가 `DEAD`면 상대의 실행 중인 동작과 대기 동작이 모두 취소된 것입니다. 취소된 동작의 `ACTION_FINISHED`는 오지 않습니다.
 
 **`SESSION_RESET` 예시:**
 
@@ -432,7 +469,8 @@
         "x": 6,
         "y": 7,
         "facing": "N",
-        "state": "IDLE"
+        "state": "IDLE",
+        "hp": 100
       },
       {
         "id": "b9d5f3c2-6a4e-4f8b-87da-2e3f4a5b6c7d",
@@ -440,7 +478,8 @@
         "x": 6,
         "y": 1,
         "facing": "S",
-        "state": "IDLE"
+        "state": "IDLE",
+        "hp": 100
       }
     ]
   }
@@ -479,8 +518,9 @@
 | `session.status` | `PLAYING`, `ENDED` |
 | `character.type` | `PLAYER`, `ENEMY` |
 | `character.facing` | `N`, `E`, `S`, `W` |
-| `character.state` | `IDLE`, `MOVING`, `TURNING`, `ATTACKING`, `DEFENDING`, `ROLLING` |
+| `character.state` | `IDLE`, `MOVING`, `TURNING`, `ATTACKING`, `DEFENDING`, `ROLLING`, `DEAD` |
+| `character.hp` | 0 ~ 100. 시작과 초기화 시 100 |
 | `action.actionType` | `move_forward`, `move_backward`, `turn_left`, `turn_right`, `attack`, `defend`, `roll` (`aiserver/actions.json`의 키) |
 | `action.status` | `QUEUED`, `RUNNING` |
 
-Action별 동작 시간, 이동 규칙, AI 호출 규칙, 캐릭터 시작 상태는 [erd.md](erd.md)의 "4. 코드 고정값"을 따른다.
+Action별 동작 시간, 이동 규칙, 공격 판정 규칙, AI 호출 규칙, 캐릭터 시작 상태는 [erd.md](erd.md)의 "4. 코드 고정값"을 따른다.

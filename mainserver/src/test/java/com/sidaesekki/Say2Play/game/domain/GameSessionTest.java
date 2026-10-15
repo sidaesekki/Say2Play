@@ -153,6 +153,126 @@ class GameSessionTest {
         assertThat(session.getLastActiveAt()).isEqualTo(NOW.plusSeconds(1));
     }
 
+    @Test
+    void 캐릭터는_HP_100으로_시작한다() {
+        assertThat(player.getHp()).isEqualTo(GameCharacter.MAX_HP);
+        assertThat(enemy.getHp()).isEqualTo(100);
+    }
+
+    @Test
+    void 공격이_끝날_때_바로_앞_칸의_상대에게_적중하면_HP가_10_깎인다() {
+        moveFaceToFace();
+
+        GameSession.FinishResult result = finishRun(player, ActionType.ATTACK);
+
+        GameSession.AttackHit hit = result.attackHit().orElseThrow();
+        assertThat(hit.target()).isSameAs(enemy);
+        assertThat(hit.damage()).isEqualTo(10);
+        assertThat(hit.defended()).isFalse();
+        assertThat(enemy.getHp()).isEqualTo(90);
+        assertThat(player.getHp()).isEqualTo(100);
+    }
+
+    @Test
+    void 앞_칸이_비어_있으면_빗나간다() {
+        GameSession.FinishResult result = finishRun(player, ActionType.ATTACK);
+
+        assertThat(result.attackHit()).isEmpty();
+        assertThat(enemy.getHp()).isEqualTo(100);
+    }
+
+    @Test
+    void 공격_도중_상대가_앞_칸에서_벗어나면_빗나간다() {
+        moveFaceToFace();
+        QueuedAction attack = session.enqueue(player, ActionType.ATTACK, NOW);
+        session.startNext(player, NOW);
+        run(enemy, ActionType.TURN_RIGHT);
+        run(enemy, ActionType.ROLL);
+        assertThat(enemy.getX()).isEqualTo(5);
+
+        assertThat(session.finish(player, attack.getId(), NOW).orElseThrow().attackHit()).isEmpty();
+        assertThat(enemy.getHp()).isEqualTo(100);
+    }
+
+    @Test
+    void 공격자를_마주_보고_방어_중이면_피해가_없다() {
+        moveFaceToFace();
+        session.enqueue(enemy, ActionType.DEFEND, NOW);
+        session.startNext(enemy, NOW);
+
+        GameSession.AttackHit hit = finishRun(player, ActionType.ATTACK).attackHit().orElseThrow();
+
+        assertThat(hit.defended()).isTrue();
+        assertThat(hit.damage()).isZero();
+        assertThat(enemy.getHp()).isEqualTo(100);
+    }
+
+    @Test
+    void 옆을_보고_방어하면_막지_못한다() {
+        moveFaceToFace();
+        run(enemy, ActionType.TURN_RIGHT);
+        session.enqueue(enemy, ActionType.DEFEND, NOW);
+        session.startNext(enemy, NOW);
+
+        GameSession.AttackHit hit = finishRun(player, ActionType.ATTACK).attackHit().orElseThrow();
+
+        assertThat(hit.defended()).isFalse();
+        assertThat(enemy.getHp()).isEqualTo(90);
+    }
+
+    @Test
+    void HP가_0이_되면_쓰러지고_큐가_비며_더_이상_명령을_받지_않는다() {
+        moveFaceToFace();
+        for (int i = 0; i < 9; i++) {
+            finishRun(player, ActionType.ATTACK);
+        }
+        QueuedAction running = session.enqueue(enemy, ActionType.TURN_LEFT, NOW);
+        session.startNext(enemy, NOW);
+        session.enqueue(enemy, ActionType.ATTACK, NOW);
+
+        finishRun(player, ActionType.ATTACK);
+
+        assertThat(enemy.getHp()).isZero();
+        assertThat(enemy.getState()).isEqualTo(CharacterState.DEAD);
+        assertThat(enemy.queueLength()).isZero();
+        assertThat(session.finish(enemy, running.getId(), NOW)).isEmpty();
+        assertThatThrownBy(() -> session.enqueue(enemy, ActionType.ATTACK, NOW))
+                .isInstanceOfSatisfying(GameException.class,
+                        e -> assertThat(e.errorCode()).isEqualTo(ErrorCode.CHARACTER_DEAD));
+
+        // 쓰러진 상대는 더 맞지 않는다.
+        assertThat(finishRun(player, ActionType.ATTACK).attackHit()).isEmpty();
+        assertThat(enemy.getHp()).isZero();
+    }
+
+    @Test
+    void 초기화하면_HP가_100으로_돌아오고_다시_명령할_수_있다() {
+        moveFaceToFace();
+        for (int i = 0; i < 10; i++) {
+            finishRun(player, ActionType.ATTACK);
+        }
+
+        session.reset(NOW);
+
+        assertThat(enemy.getHp()).isEqualTo(100);
+        assertThat(enemy.getState()).isEqualTo(CharacterState.IDLE);
+        assertThat(session.enqueue(enemy, ActionType.ATTACK, NOW)).isNotNull();
+    }
+
+    // 플레이어를 (6,2)로 옮겨 (6,1)의 적과 마주 보게 한다. 플레이어는 N, 적은 S를 본다.
+    private void moveFaceToFace() {
+        for (int i = 0; i < 5; i++) {
+            run(player, ActionType.MOVE_FORWARD);
+        }
+        assertThat(player.getY()).isEqualTo(2);
+    }
+
+    private GameSession.FinishResult finishRun(GameCharacter character, ActionType type) {
+        QueuedAction action = session.enqueue(character, type, NOW);
+        session.startNext(character, NOW).orElseThrow();
+        return session.finish(character, action.getId(), NOW).orElseThrow();
+    }
+
     private QueuedAction run(GameCharacter character, ActionType type) {
         QueuedAction action = session.enqueue(character, type, NOW);
         session.startNext(character, NOW).orElseThrow();

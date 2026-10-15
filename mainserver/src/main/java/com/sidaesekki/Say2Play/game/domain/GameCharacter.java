@@ -10,6 +10,8 @@ import java.util.UUID;
 /** CHARACTER 한 행과 그 캐릭터의 ACTION_QUEUE. GameSession의 락 안에서만 바뀐다. */
 public class GameCharacter {
 
+    public static final int MAX_HP = 100;
+
     private final UUID id;
     private final CharacterType type;
     private final Instant createdAt;
@@ -19,6 +21,7 @@ public class GameCharacter {
     private int y;
     private Facing facing;
     private CharacterState state;
+    private int hp;
     private Instant updatedAt;
 
     GameCharacter(UUID id, CharacterType type, Instant now) {
@@ -34,6 +37,7 @@ public class GameCharacter {
         y = type.startY();
         facing = type.startFacing();
         state = CharacterState.IDLE;
+        hp = MAX_HP;
         updatedAt = now;
     }
 
@@ -58,6 +62,20 @@ public class GameCharacter {
         facing = action.getTargetFacing();
         state = CharacterState.IDLE;
         updatedAt = now;
+    }
+
+    /** HP는 0 아래로 내려가지 않는다. 0이 되면 쓰러지고 남은 동작은 모두 취소된다. */
+    void takeDamage(int damage, Instant now) {
+        hp = Math.max(0, hp - damage);
+        if (hp == 0) {
+            queue.clear();
+            state = CharacterState.DEAD;
+        }
+        updatedAt = now;
+    }
+
+    public boolean isDead() {
+        return state == CharacterState.DEAD;
     }
 
     Optional<QueuedAction> head() {
@@ -99,6 +117,10 @@ public class GameCharacter {
 
     public CharacterState getState() {
         return state;
+    }
+
+    public int getHp() {
+        return hp;
     }
 
     public Instant getCreatedAt() {

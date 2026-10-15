@@ -66,6 +66,7 @@ class SessionApiTest {
                 .andExpect(jsonPath("$.data.characters[0].y").value(7))
                 .andExpect(jsonPath("$.data.characters[0].facing").value("N"))
                 .andExpect(jsonPath("$.data.characters[0].state").value("IDLE"))
+                .andExpect(jsonPath("$.data.characters[0].hp").value(100))
                 .andExpect(jsonPath("$.data.characters[0].queue").doesNotExist())
                 .andExpect(jsonPath("$.data.characters[1].type").value("ENEMY"))
                 .andExpect(jsonPath("$.data.characters[1].y").value(1))

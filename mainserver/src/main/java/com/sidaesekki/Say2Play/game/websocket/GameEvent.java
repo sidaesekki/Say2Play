@@ -18,6 +18,10 @@ public record GameEvent(GameEventType type, Object data) {
     public record ActionFinished(UUID actionId, CharacterResponse character, int queueLength) {
     }
 
+    /** 공격이 끝날 때 앞 칸의 상대에게 적중했을 때. {@code target}은 피해가 반영된 상대 상태다. */
+    public record AttackHit(UUID attackerId, UUID actionId, CharacterResponse target, int damage, boolean defended) {
+    }
+
     public record SessionReset(List<CharacterResponse> characters) {
     }
 

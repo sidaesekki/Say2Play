@@ -20,3 +20,6 @@
 @media(max-width:1000px){.statusbar{padding:5px 12px}}
 @media(max-width:740px){.actor-status{flex-wrap:wrap;padding:6px 0}.actor-status .coordinates{font-size:8px}}
 button:disabled,textarea:disabled{cursor:not-allowed;opacity:.55}.connection-error{font-size:13px;color:#b05d47;line-height:1.7}.session-button{border:1px solid #dfe6dc;background:#fff;color:#6d8064;border-radius:7px;padding:7px 12px;margin-bottom:12px}.queue-count{font-size:10px;color:#87918b;margin:4px 0 0}.feedback{overflow-wrap:anywhere}
+
+.actor-status .hp{display:flex;align-items:center;gap:6px;white-space:nowrap}.hp-bar{width:64px;height:5px;border-radius:3px;background:#e4e9de;overflow:hidden;display:block}.hp-bar i{display:block;height:100%;width:100%;border-radius:3px;background:#88a66d;transition:width .3s}.enemy-status .hp-bar i{background:#c98f83}.actor-status .hp b{min-width:20px}
+.result-banner{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;gap:6px;text-align:center;background:#fffffff0;border:1px solid #dfe6dc;border-radius:12px;padding:18px 28px;box-shadow:0 8px 30px #2a3d3214}.result-banner b{font-size:20px;letter-spacing:-.6px}.result-banner span{font-size:11px;color:#87918b}
