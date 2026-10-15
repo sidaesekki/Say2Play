@@ -1,0 +1,6 @@
+# 음성 인식 서버(voice_server.py)용 패키지예요. 도커 이미지(server.py)에는 들어가지 않아요.
+# mlx-whisper는 MLX를 쓰기 때문에 Apple Silicon 맥에서만 돌아가요.
+-r requirements.txt
+fastapi==0.143.2
+uvicorn==0.54.0
+mlx-whisper==0.4.3
