@@ -1,3 +1,16 @@
 spring:
   application:
     name: Say2Play
+
+say2play:
+  cors:
+    # REST와 WebSocket 요청을 허용할 gameclient 출처
+    allowed-origins: http://localhost:5173
+  session:
+    # 마지막 입력 이후 이 시간이 지나면 세션이 만료된다.
+    idle-timeout: 30m
+  ai:
+    # fake: 서버 안에서 키워드로 Jev를 흉내 낸다. http: aiserver를 HTTP로 호출한다.
+    mode: fake
+    base-url: http://localhost:8001
+    timeout: 5s
