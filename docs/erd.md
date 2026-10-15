@@ -128,17 +128,15 @@ erDiagram
 
 | 값 | duration(s) | 캐릭터 state | 효과 |
 | --- | --- | --- | --- |
-| move_up | 0.32 | `MOVING` | 화면 위쪽(`y-1`)으로 1칸 이동. facing은 유지 |
-| move_down | 0.32 | `MOVING` | 화면 아래쪽(`y+1`)으로 1칸 이동. facing은 유지 |
-| move_left | 0.32 | `MOVING` | 화면 왼쪽(`x-1`)으로 1칸 이동. facing은 유지 |
-| move_right | 0.32 | `MOVING` | 화면 오른쪽(`x+1`)으로 1칸 이동. facing은 유지 |
+| move_forward | 0.32 | `MOVING` | 바라보는 방향으로 1칸 이동. facing은 유지 |
+| move_backward | 0.32 | `MOVING` | 바라보는 반대 방향으로 1칸 이동. facing은 유지 |
 | turn_left | 0.30 | `TURNING` | 제자리에서 반시계 방향으로 90도 회전 |
 | turn_right | 0.30 | `TURNING` | 제자리에서 시계 방향으로 90도 회전 |
 | attack | 0.48 | `ATTACKING` | facing 방향으로 공격 (v1은 피해 판정 없음) |
 | defend | 1.10 | `DEFENDING` | facing 방향으로 방어 (v1은 피해 판정 없음) |
 | roll | 0.50 | `ROLLING` | facing 방향으로 1칸 이동 |
 
-- 입력 1건은 Action 1개로만 매칭되고 1회 실행된다. 반복(예: "위로 3칸")이나 연결(예: "위로 가서 공격")도 가장 비슷한 Action 1개로 처리된다.
+- 입력 1건은 Action 1개로만 매칭되고 1회 실행된다. 반복(예: "앞으로 3칸")이나 연결(예: "앞으로 가서 공격")도 가장 비슷한 Action 1개로 처리된다.
 
 ### 이동 규칙 (move_*, roll)
 

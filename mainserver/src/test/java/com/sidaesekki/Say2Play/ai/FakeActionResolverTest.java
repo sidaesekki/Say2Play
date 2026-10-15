@@ -12,11 +12,10 @@ class FakeActionResolverTest {
 
     @ParameterizedTest
     @CsvSource({
-            "위로 가, MOVE_UP",
-            "위로 올라가서 공격해, MOVE_UP",
-            "아래로 이동, MOVE_DOWN",
-            "왼쪽으로 이동, MOVE_LEFT",
-            "오른쪽으로 한 발짝 가볼까, MOVE_RIGHT",
+            "앞으로 가, MOVE_FORWARD",
+            "전진해, MOVE_FORWARD",
+            "뒤로 물러나, MOVE_BACKWARD",
+            "후진, MOVE_BACKWARD",
             "왼쪽으로 돌아, TURN_LEFT",
             "오른쪽으로 돌기, TURN_RIGHT",
             "Turn Right, TURN_RIGHT",

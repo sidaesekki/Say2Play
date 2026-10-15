@@ -24,7 +24,7 @@ function CommandPanel({character,type,index,client}) {
     <div className="section-title"><span className="number">0{index+1}</span><h2>{name} 명령</h2><span className="keyboard">↵</span></div>
     <p className="description">입력 한 건을 AI가 동작 하나로 해석합니다.</p>
     <form onSubmit={submit}><label className="sr-only" htmlFor={`${type}-command`}>{name} 동작</label>
-      <textarea id={`${type}-command`} rows="2" maxLength={500} value={text} disabled={disabled} onChange={e=>setText(e.target.value)} placeholder={enemy?'예: 아래쪽으로 한 발짝 가볼까':'예: 오른쪽으로 돌아봐'} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();e.currentTarget.form.requestSubmit();}}}/>
+      <textarea id={`${type}-command`} rows="2" maxLength={500} value={text} disabled={disabled} onChange={e=>setText(e.target.value)} placeholder={enemy?'예: 앞으로 가':'예: 오른쪽으로 돌아봐'} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();e.currentTarget.form.requestSubmit();}}}/>
       <div className="input-hint">Enter 실행 <span>Shift + Enter 줄바꿈</span></div>
       <button className="run" disabled={disabled} type="submit"><span>{client.pending[character?.id]?'명령 해석 중…':`${name} 명령 실행`}</span><span>↗</span></button>
     </form>

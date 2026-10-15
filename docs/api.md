@@ -195,7 +195,7 @@
 
 ```json
 {
-  "text": "오른쪽으로 한 발짝 가볼까"
+  "text": "앞으로 가"
 }
 ```
 
@@ -209,7 +209,7 @@
     "action": {
       "id": "e3f4a5b6-2222-4c3d-8e4f-5a6b7c8d9e0f",
       "seq": 6,
-      "actionType": "move_right",
+      "actionType": "move_forward",
       "status": "QUEUED",
       "targetX": null,
       "targetY": null,
@@ -222,7 +222,7 @@
 ```
 
 > **응답은 "큐에 넣었다"는 뜻이지 "실행이 끝났다"는 뜻이 아닙니다.** 실제 실행 시작과 완료는 WebSocket 이벤트(`ACTION_STARTED`, `ACTION_FINISHED`)로 알려줍니다.
-> AI(aiserver, Jev)는 항상 Action Set 안에서 매칭하므로 "이해하지 못함" 응답은 없습니다. `오늘 날씨 좋다`처럼 명령이 아닌 말도 가장 비슷한 Action 1개로 처리됩니다. `위로 3칸`, `위로 가서 공격`처럼 반복하거나 이어 쓴 입력도 마찬가지입니다.
+> AI(aiserver, Jev)는 항상 Action Set 안에서 매칭하므로 "이해하지 못함" 응답은 없습니다. `오늘 날씨 좋다`처럼 명령이 아닌 말도 가장 비슷한 Action 1개로 처리됩니다. `앞으로 3칸`, `앞으로 가서 공격`처럼 반복하거나 이어 쓴 입력도 마찬가지입니다.
 > AI 호출이 실패하거나 5초 안에 응답이 없으면 큐에 넣지 않고 에러(`502`/`504`)를 돌려줍니다. 서버는 자동으로 재시도하지 않습니다.
 > 서버는 입력 원문을 보관하거나 돌려주지 않습니다. 화면에 표시할 문구는 클라이언트가 자신이 보낸 `text`를 `action.id`와 짝지어 직접 관리합니다.
 > `queueLength`는 방금 넣은 동작과 실행 중인 동작을 포함한 해당 캐릭터의 큐 길이입니다.
@@ -385,7 +385,7 @@
     "action": {
       "id": "f4a5b6c7-3333-4d4e-9f5a-6b7c8d9e0f1a",
       "seq": 7,
-      "actionType": "move_up",
+      "actionType": "move_forward",
       "status": "RUNNING",
       "targetX": 6,
       "targetY": 2,
@@ -480,7 +480,7 @@
 | `character.type` | `PLAYER`, `ENEMY` |
 | `character.facing` | `N`, `E`, `S`, `W` |
 | `character.state` | `IDLE`, `MOVING`, `TURNING`, `ATTACKING`, `DEFENDING`, `ROLLING` |
-| `action.actionType` | `move_up`, `move_down`, `move_left`, `move_right`, `turn_left`, `turn_right`, `attack`, `defend`, `roll` (`aiserver/actions.json`의 키) |
+| `action.actionType` | `move_forward`, `move_backward`, `turn_left`, `turn_right`, `attack`, `defend`, `roll` (`aiserver/actions.json`의 키) |
 | `action.status` | `QUEUED`, `RUNNING` |
 
 Action별 동작 시간, 이동 규칙, AI 호출 규칙, 캐릭터 시작 상태는 [erd.md](erd.md)의 "4. 코드 고정값"을 따른다.

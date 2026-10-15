@@ -104,12 +104,12 @@ class SessionApiTest {
 
     @Test
     void 이동_동작은_시작할_때_목표_칸이_정해진다() throws Exception {
-        command(enemyId, "{\"text\":\"오른쪽으로 한 발짝 가볼까\"}")
+        command(enemyId, "{\"text\":\"앞으로 가\"}")
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.action.actionType").value("move_right"))
+                .andExpect(jsonPath("$.data.action.actionType").value("move_forward"))
                 .andExpect(jsonPath("$.data.action.status").value("RUNNING"))
-                .andExpect(jsonPath("$.data.action.targetX").value(7))
-                .andExpect(jsonPath("$.data.action.targetY").value(1));
+                .andExpect(jsonPath("$.data.action.targetX").value(6))
+                .andExpect(jsonPath("$.data.action.targetY").value(2));
     }
 
     @Test
@@ -149,7 +149,7 @@ class SessionApiTest {
 
     @Test
     void 초기화하면_큐를_비우고_시작_위치로_돌아간다() throws Exception {
-        command(playerId, "{\"text\":\"위로 가\"}");
+        command(playerId, "{\"text\":\"앞으로 가\"}");
         command(playerId, "{\"text\":\"공격\"}");
 
         mockMvc.perform(post("/api/v1/sessions/{id}/reset", sessionId))

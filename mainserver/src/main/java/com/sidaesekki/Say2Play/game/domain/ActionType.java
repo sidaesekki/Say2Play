@@ -9,10 +9,8 @@ import java.util.Optional;
  * Action Set. 키는 aiserver/actions.json의 키와 같다(erd.md "ACTION_TYPE").
  */
 public enum ActionType {
-    MOVE_UP("move_up", 320, CharacterState.MOVING),
-    MOVE_DOWN("move_down", 320, CharacterState.MOVING),
-    MOVE_LEFT("move_left", 320, CharacterState.MOVING),
-    MOVE_RIGHT("move_right", 320, CharacterState.MOVING),
+    MOVE_FORWARD("move_forward", 320, CharacterState.MOVING),
+    MOVE_BACKWARD("move_backward", 320, CharacterState.MOVING),
     TURN_LEFT("turn_left", 300, CharacterState.TURNING),
     TURN_RIGHT("turn_right", 300, CharacterState.TURNING),
     ATTACK("attack", 480, CharacterState.ATTACKING),
@@ -46,13 +44,11 @@ public enum ActionType {
         return Arrays.stream(values()).filter(type -> type.key.equals(key)).findFirst();
     }
 
-    /** 칸을 옮기는 동작(move_*, roll)이면 이동 방향을, 아니면 empty를 돌려준다. move_*는 facing과 무관하게 화면 기준이다. */
+    /** 칸을 옮기는 동작이면 이동 방향을, 아니면 empty를 돌려준다. */
     public Optional<Facing> moveDirection(Facing facing) {
         return switch (this) {
-            case MOVE_UP -> Optional.of(Facing.N);
-            case MOVE_DOWN -> Optional.of(Facing.S);
-            case MOVE_LEFT -> Optional.of(Facing.W);
-            case MOVE_RIGHT -> Optional.of(Facing.E);
+            case MOVE_FORWARD -> Optional.of(facing);
+            case MOVE_BACKWARD -> Optional.of(facing.opposite());
             case ROLL -> Optional.of(facing);
             default -> Optional.empty();
         };

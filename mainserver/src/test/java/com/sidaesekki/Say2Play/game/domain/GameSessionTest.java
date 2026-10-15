@@ -37,8 +37,9 @@ class GameSessionTest {
     }
 
     @Test
-    void 이동은_시작할_때_목표를_정하고_끝날_때_좌표를_확정한다() {
-        QueuedAction action = session.enqueue(player, ActionType.MOVE_RIGHT, NOW);
+    void 앞으로_이동은_바라보는_방향을_따라_목표를_정한다() {
+        run(player, ActionType.TURN_RIGHT);
+        QueuedAction action = session.enqueue(player, ActionType.MOVE_FORWARD, NOW);
         assertThat(action.getStatus()).isEqualTo(ActionStatus.QUEUED);
         assertThat(action.getTargetX()).isNull();
 
@@ -51,15 +52,20 @@ class GameSessionTest {
 
         assertThat(session.finish(player, action.getId(), NOW)).isPresent();
         assertThat(player.getX()).isEqualTo(7);
-        assertThat(player.getFacing()).isEqualTo(Facing.N);
+        assertThat(player.getFacing()).isEqualTo(Facing.E);
         assertThat(player.getState()).isEqualTo(CharacterState.IDLE);
         assertThat(player.queueLength()).isZero();
+
+        run(player, ActionType.MOVE_BACKWARD);
+        assertThat(player.getX()).isEqualTo(6);
+        assertThat(player.getY()).isEqualTo(7);
+        assertThat(player.getFacing()).isEqualTo(Facing.E);
     }
 
     @Test
     void 맵_경계를_넘으면_경계_칸에_머문다() {
-        run(player, ActionType.MOVE_DOWN);
-        QueuedAction action = run(player, ActionType.MOVE_DOWN);
+        run(player, ActionType.MOVE_BACKWARD);
+        QueuedAction action = run(player, ActionType.MOVE_BACKWARD);
 
         assertThat(player.getY()).isEqualTo(8);
         assertThat(action.getTargetY()).isEqualTo(8);
@@ -69,11 +75,11 @@ class GameSessionTest {
     @Test
     void 다른_캐릭터가_있는_칸으로는_이동하지_못한다() {
         for (int i = 0; i < 5; i++) {
-            run(player, ActionType.MOVE_UP);
+            run(player, ActionType.MOVE_FORWARD);
         }
         assertThat(player.getY()).isEqualTo(2);
 
-        QueuedAction action = run(player, ActionType.MOVE_UP);
+        QueuedAction action = run(player, ActionType.MOVE_FORWARD);
 
         assertThat(action.isBlocked()).isTrue();
         assertThat(action.getTargetX()).isEqualTo(6);
@@ -84,12 +90,12 @@ class GameSessionTest {
     @Test
     void 다른_캐릭터가_이동_중인_목표_칸으로는_이동하지_못한다() {
         for (int i = 0; i < 4; i++) {
-            run(player, ActionType.MOVE_UP);
+            run(player, ActionType.MOVE_FORWARD);
         }
-        session.enqueue(enemy, ActionType.MOVE_DOWN, NOW);
+        session.enqueue(enemy, ActionType.MOVE_FORWARD, NOW);
         session.startNext(enemy, NOW);
 
-        session.enqueue(player, ActionType.MOVE_UP, NOW);
+        session.enqueue(player, ActionType.MOVE_FORWARD, NOW);
         QueuedAction action = session.startNext(player, NOW).orElseThrow();
 
         assertThat(action.isBlocked()).isTrue();
@@ -134,7 +140,7 @@ class GameSessionTest {
 
     @Test
     void 초기화하면_큐를_비우고_시작_위치로_돌아가며_이전_완료_예약은_무시된다() {
-        QueuedAction action = session.enqueue(player, ActionType.MOVE_LEFT, NOW);
+        QueuedAction action = session.enqueue(player, ActionType.MOVE_BACKWARD, NOW);
         session.startNext(player, NOW);
         session.enqueue(player, ActionType.ATTACK, NOW);
 
