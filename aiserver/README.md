@@ -22,6 +22,7 @@ cp .env.example .env
 | 파일 | 내용 |
 |---|---|
 | `jev_client.py` | Jev를 호출해 명령 하나를 행동 확률로 바꾸는 `JevClient` |
+| `server.py` | 메인 서버가 호출하는 HTTP 서버. `POST /v1/decide`로 `JevClient`를 감싸요(임시 스펙). |
 | `actions.json` | 탑뷰 게임 캐릭터의 행동 9개(상하좌우 이동, 좌우 회전, 공격, 방어, 구르기). 키는 행동 이름, 값은 Jev가 읽는 영어 설명이에요. |
 
 ## 사용법
@@ -53,6 +54,18 @@ with JevClient() as jev:
 
 Choice는 명령이 아닌 말에도 반드시 행동 하나를 골라요. 그래서 `is_command`가 `False`면 `probabilities`는 무시하는 게 좋아요.
 가장 높은 행동을 쓸지, 확률대로 뽑을지는 받는 쪽에서 정하면 돼요.
+
+## HTTP 서버
+
+메인 서버는 이 서버를 HTTP로 호출해요. 스펙은 실제 스펙이 정해지기 전까지 쓰는 임시 스펙이에요.
+
+```bash
+.venv/bin/python server.py   # 기본 포트 8001 (PORT 환경 변수로 변경)
+curl -X POST localhost:8001/v1/decide -d '{"text": "위로 가"}'
+# {"choice": "move_up", "probabilities": {...}, "confidence": ..., "isCommand": true, "commandScore": ..., "model": "jev-1.13.0"}
+```
+
+Jev 호출에 실패하면 502, `text`가 비어 있으면 400을 돌려줘요. 상태 확인은 `GET /health`예요.
 
 ## 테스트하며 알게 된 점 (jev-1.13.0, 한국어 명령 20개)
 
