@@ -19,3 +19,4 @@
 .enemy-panel .run:hover{background:#e8baa9}
 @media(max-width:1000px){.statusbar{padding:5px 12px}}
 @media(max-width:740px){.actor-status{flex-wrap:wrap;padding:6px 0}.actor-status .coordinates{font-size:8px}}
+button:disabled,textarea:disabled{cursor:not-allowed;opacity:.55}.connection-error{font-size:13px;color:#b05d47;line-height:1.7}.session-button{border:1px solid #dfe6dc;background:#fff;color:#6d8064;border-radius:7px;padding:7px 12px;margin-bottom:12px}.queue-count{font-size:10px;color:#87918b;margin:4px 0 0}.feedback{overflow-wrap:anywhere}
