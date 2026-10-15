@@ -50,3 +50,20 @@ test('knockout marks the target dead and drops its queue and animation',()=>{
  assert.equal(c.hp,0);assert.equal(c.state,'DEAD');assert.equal(c.animation,null);assert.deepEqual(c.queue,[]);
  assert.equal(visualActor(c,1160,{x:0,y:0},10).dead,true);
 });
+const multi=()=>({...initial(),session:{id:'session',mode:'MULTI',status:'PLAYING',mapCols:13,mapRows:9},players:[{controls:['PLAYER'],connected:true},{controls:['ENEMY'],connected:true}]});
+test('round over freezes queues and remembers the reset time',()=>{
+ const game=applyEvent(applyEvent(multi(),start),{type:'ROUND_OVER',data:{winnerId:'player',loserId:'enemy',resetAt:new Date(5000).toISOString(),delayMs:3000}});
+ assert.equal(game.session.status,'ROUND_OVER');assert.equal(game.round.resetAt,5000);assert.equal(game.round.winnerId,'player');
+ assert.deepEqual(game.characters[0].queue,[]);assert.equal(game.characters[0].animation,null);
+ const reset=applyEvent(game,{type:'SESSION_RESET',data:{session:{...game.session,status:'PLAYING'},characters:[character]}});
+ assert.equal(reset.session.status,'PLAYING');assert.equal(reset.round,null);
+});
+test('players join, disconnect and leave',()=>{
+ const waiting={...multi(),session:{...multi().session,status:'WAITING'},players:[{controls:['PLAYER'],connected:true}]};
+ const joined=applyEvent(waiting,{type:'PLAYER_JOINED',data:{controls:['ENEMY'],session:{...waiting.session,status:'PLAYING'},characters:[character]}});
+ assert.equal(joined.session.status,'PLAYING');assert.equal(joined.players.length,2);assert.equal(joined.players[1].connected,false);
+ const online=applyEvent(joined,{type:'PLAYER_CONNECTION',data:{controls:['ENEMY'],connected:true}});
+ assert.equal(online.players[1].connected,true);
+ const left=applyEvent(applyEvent(online,start),{type:'PLAYER_LEFT',data:{controls:['ENEMY'],reason:'DISCONNECTED',session:{...waiting.session},characters:[character]}});
+ assert.equal(left.session.status,'WAITING');assert.equal(left.players.length,1);assert.equal(left.characters[0].animation,null);
+});

@@ -1,87 +1,44 @@
 package com.sidaesekki.Say2Play.game.websocket;
 
-import java.io.IOException;
-import java.util.Map;
-import java.util.Set;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
-import org.springframework.web.socket.CloseStatus;
-import org.springframework.web.socket.TextMessage;
-import org.springframework.web.socket.WebSocketSession;
-import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
-import tools.jackson.databind.json.JsonMapper;
 
-/** 게임 세션별로 연결된 WebSocket에 이벤트를 브로드캐스트한다. */
+/** 게임 세션의 토픽({@code /topic/sessions/{sessionId}})으로 이벤트를 브로드캐스트한다. */
 @Component
 public class GameEventPublisher {
 
-    private static final Logger log = LoggerFactory.getLogger(GameEventPublisher.class);
-    private static final int SEND_TIME_LIMIT_MS = 5_000;
-    private static final int BUFFER_SIZE_LIMIT = 512 * 1024;
+    // 마지막 이벤트가 클라이언트에 전달될 시간을 준 뒤 연결을 닫는다.
+    private static final Duration CLOSE_DELAY = Duration.ofSeconds(1);
 
-    private final JsonMapper jsonMapper;
-    private final Map<UUID, Set<WebSocketSession>> connections = new ConcurrentHashMap<>();
+    private final SimpMessagingTemplate messagingTemplate;
+    private final ConnectionRegistry connectionRegistry;
+    private final TaskScheduler taskScheduler;
 
-    public GameEventPublisher(JsonMapper jsonMapper) {
-        this.jsonMapper = jsonMapper;
-    }
-
-    void register(UUID sessionId, WebSocketSession connection) {
-        // 여러 스레드에서 보내도 안전하도록 감싼다.
-        connections.computeIfAbsent(sessionId, id -> ConcurrentHashMap.newKeySet())
-                .add(new ConcurrentWebSocketSessionDecorator(connection, SEND_TIME_LIMIT_MS, BUFFER_SIZE_LIMIT));
-    }
-
-    void unregister(UUID sessionId, WebSocketSession connection) {
-        connections.computeIfPresent(sessionId, (id, set) -> {
-            set.removeIf(decorated -> decorated.getId().equals(connection.getId()));
-            return set.isEmpty() ? null : set;
-        });
+    public GameEventPublisher(SimpMessagingTemplate messagingTemplate, ConnectionRegistry connectionRegistry,
+                              @Qualifier("taskScheduler") TaskScheduler taskScheduler) {
+        this.messagingTemplate = messagingTemplate;
+        this.connectionRegistry = connectionRegistry;
+        this.taskScheduler = taskScheduler;
     }
 
     public void publish(UUID sessionId, GameEventType type, Object data) {
-        Set<WebSocketSession> targets = connections.get(sessionId);
-        if (targets == null || targets.isEmpty()) {
-            return;
-        }
-        TextMessage message = new TextMessage(jsonMapper.writeValueAsString(new GameEvent(type, data)));
-        for (WebSocketSession target : targets) {
-            send(target, message);
-        }
+        messagingTemplate.convertAndSend(StompAuthInterceptor.TOPIC_PREFIX + sessionId, new GameEvent(type, data));
     }
 
     /** SESSION_ENDED를 보낸 뒤 그 세션의 연결을 모두 닫는다. */
     public void publishEndedAndClose(UUID sessionId, GameEvent.EndReason reason) {
         publish(sessionId, GameEventType.SESSION_ENDED, new GameEvent.SessionEnded(reason));
-        Set<WebSocketSession> targets = connections.remove(sessionId);
-        if (targets == null) {
-            return;
-        }
-        for (WebSocketSession target : targets) {
-            close(target);
-        }
+        taskScheduler.schedule(() -> connectionRegistry.closeSession(sessionId), Instant.now().plus(CLOSE_DELAY));
     }
 
-    private void send(WebSocketSession target, TextMessage message) {
-        if (!target.isOpen()) {
-            return;
-        }
-        try {
-            target.sendMessage(message);
-        } catch (IOException | RuntimeException e) {
-            log.debug("WebSocket send failed: {}", target.getId(), e);
-            close(target);
-        }
-    }
-
-    private void close(WebSocketSession target) {
-        try {
-            target.close(CloseStatus.NORMAL);
-        } catch (IOException e) {
-            log.debug("WebSocket close failed: {}", target.getId(), e);
-        }
+    /** 나간 참가자의 연결을 닫는다. 토큰이 무효가 되었으므로 다시 연결할 수 없다. */
+    public void closeParticipant(UUID participantId) {
+        taskScheduler.schedule(() -> connectionRegistry.closeParticipant(participantId),
+                Instant.now().plus(CLOSE_DELAY));
     }
 }

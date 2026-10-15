@@ -16,7 +16,7 @@ npm run dev
 
 개발 서버는 `/api`와 `/ws` 요청을 `http://localhost:8080`으로 전달합니다. 서버 주소를 바꾸려면 `.env.example`을 `.env.local`로 복사하고 `API_PROXY_TARGET`을 수정한 뒤 개발 서버를 재시작하세요.
 
-**현재 저장소의 mainserver는 Spring Boot 기본 골격만 있고 게임 API 구현은 없습니다.** 실제 플레이에는 [API 명세](../docs/api.md)의 REST 및 WebSocket API를 구현한 서버와 해당 서버가 사용하는 AI 서비스가 필요합니다. 서버가 없으면 연결 실패 메시지가 표시됩니다.
+실제 플레이에는 mainserver와 aiserver가 함께 떠 있어야 합니다. 저장소 루트에서 `docker compose up --build`로 한 번에 띄울 수 있습니다.
 
 ```sh
 npm test
@@ -28,20 +28,21 @@ npm run preview
 
 ## 동작 및 API
 
-- 첫 진입: `POST /api/v1/sessions`, 이후 `/ws/sessions/{sessionId}` 연결.
-- 세션 ID를 탭의 sessionStorage에 저장합니다. 새로고침·재연결 시 `GET /sessions/{sessionId}`로 상태를 복원합니다. 동기화 중 수신한 이벤트는 버퍼링한 뒤 적용합니다.
-- 두 캐릭터에 각각 원문 `{text}`를 REST로 전송합니다. 앞뒤 공백 제외 1~500자이며, 입력 한 건은 **동작 하나**입니다. 반복·쉼표·줄바꿈을 클라이언트에서 여러 동작으로 나누지 않습니다.
-- `ACTION_STARTED`의 `from`, `to`, `durationMs`로 애니메이션을 보간하며 `ACTION_FINISHED`의 좌표와 방향을 확정 상태로 적용합니다. 이동 가능 여부와 충돌은 서버가 결정합니다.
+- 로비에서 **혼자 하기**(두 캐릭터를 모두 조종) 또는 **친구와 하기**(1:1)를 고릅니다. `POST /api/v1/sessions`(`mode: SOLO | MULTI`)로 세션을 만들고 받은 참가자 토큰을 탭의 sessionStorage에 저장합니다.
+- 친구와 하기는 방을 만들면 주소창이 초대 링크(`?session={sessionId}`)로 바뀝니다. 링크로 들어온 사람은 `POST /sessions/{sessionId}/join`으로 참가하며, 두 명이 모이면 시작합니다. 내 캐릭터의 입력창만 보입니다.
+- 이후 REST 요청은 `X-Player-Token` 헤더에 토큰을 담아 보냅니다. 실시간 이벤트는 STOMP(`/ws`, CONNECT 헤더 `X-Session-Id`·`X-Player-Token`)로 `/topic/sessions/{sessionId}`를 구독해 받습니다.
+- 연결 직후 `GET /sessions/{sessionId}`로 상태를 복원하고, 그사이 받은 이벤트를 버퍼링했다가 적용합니다. 새로고침해도 10초 안에 다시 연결되면 자리가 유지됩니다.
+- 입력 한 건은 **동작 하나**입니다. `ACTION_STARTED`의 `from`, `to`, `durationMs`로 애니메이션을 보간하고 `ACTION_FINISHED`의 좌표와 방향을 확정 상태로 적용합니다. 이동 가능 여부, 충돌, 적중은 서버가 결정합니다.
+- 한쪽이 쓰러지면(`ROUND_OVER`) 승리 배너와 카운트다운을 표시하고, 3초 뒤 `SESSION_RESET`으로 새 판이 시작됩니다. 수동 초기화 버튼은 혼자 하기에만 있습니다.
+- 게임 나가기는 `POST /sessions/{sessionId}/leave`입니다. 1:1에서 상대가 나가면 같은 링크로 새 상대를 기다립니다.
 - Enter로 전송, Shift+Enter로 줄바꿈합니다. 한국어 조합 중 Enter는 전송하지 않습니다. 실패한 입력은 유지하고 자동 재전송하지 않습니다.
-- 초기화는 `POST /sessions/{sessionId}/reset`, 게임 나가기는 `DELETE /sessions/{sessionId}`입니다. 새로고침 시 복구를 위해 페이지 종료 시에는 세션을 삭제하지 않습니다. 미종료 세션은 서버의 30분 만료 정책을 따릅니다.
-- 연결 중단 시 최대 10초 간격으로 재연결합니다. 세션 종료·만료 시 새 게임을 시작할 수 있습니다.
-- 상태바 좌표는 API와 동일한 좌상단 `(0, 0)` 기준입니다. 마지막 입력 문구는 해당 응답의 `action.id`와 함께 메모리에만 보관됩니다.
+- 상태바 좌표는 API와 동일한 좌상단 `(0, 0)` 기준입니다.
 
 ## 구성
 
 - `src/main.jsx`: React 화면, 캐릭터 입력 패널, Canvas 생명주기
-- `src/useGame.js`: 세션, 연결 복구, 명령·초기화·종료 처리
-- `src/api.js`: REST 공통 응답·에러 처리 및 WebSocket 주소
+- `src/useGame.js`: 로비·참가, STOMP 연결과 복구, 명령·초기화·나가기 처리
+- `src/api.js`: REST 공통 응답·에러 처리, 토큰 헤더, STOMP 주소와 초대 링크
 - `src/state.js`: 서버 상태 복원, 이벤트 적용, 애니메이션 좌표
 - `src/renderer.js`: Canvas 지도·캐릭터·동작 렌더링
 - `style.css`: 기존 반응형 스타일

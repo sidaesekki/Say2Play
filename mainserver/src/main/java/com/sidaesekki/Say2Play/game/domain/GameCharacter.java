@@ -74,6 +74,15 @@ public class GameCharacter {
         updatedAt = now;
     }
 
+    /** 남은 동작을 모두 버린다. 쓰러진 캐릭터는 DEAD를 유지한다. */
+    void clearQueue(Instant now) {
+        queue.clear();
+        if (!isDead()) {
+            state = CharacterState.IDLE;
+        }
+        updatedAt = now;
+    }
+
     public boolean isDead() {
         return state == CharacterState.DEAD;
     }

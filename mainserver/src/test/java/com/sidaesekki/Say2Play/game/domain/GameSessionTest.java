@@ -20,7 +20,7 @@ class GameSessionTest {
 
     @BeforeEach
     void setUp() {
-        session = new GameSession(UUID.randomUUID(), NOW);
+        session = new GameSession(UUID.randomUUID(), SessionMode.SOLO, NOW);
         player = session.character(CharacterType.PLAYER);
         enemy = session.character(CharacterType.ENEMY);
     }
@@ -221,7 +221,7 @@ class GameSessionTest {
     }
 
     @Test
-    void HP가_0이_되면_쓰러지고_큐가_비며_더_이상_명령을_받지_않는다() {
+    void HP가_0이_되면_쓰러지고_판이_끝나며_양쪽_모두_명령을_받지_않는다() {
         moveFaceToFace();
         for (int i = 0; i < 9; i++) {
             finishRun(player, ActionType.ATTACK);
@@ -230,19 +230,45 @@ class GameSessionTest {
         session.startNext(enemy, NOW);
         session.enqueue(enemy, ActionType.ATTACK, NOW);
 
-        finishRun(player, ActionType.ATTACK);
+        QueuedAction attack = session.enqueue(player, ActionType.ATTACK, NOW);
+        session.enqueue(player, ActionType.DEFEND, NOW);
+        GameSession.FinishResult result = finishRunAhead(attack);
 
+        assertThat(result.roundOver()).isTrue();
+        assertThat(session.getStatus()).isEqualTo(SessionStatus.ROUND_OVER);
         assertThat(enemy.getHp()).isZero();
         assertThat(enemy.getState()).isEqualTo(CharacterState.DEAD);
         assertThat(enemy.queueLength()).isZero();
+        assertThat(player.queueLength()).isZero();
+        assertThat(player.getState()).isEqualTo(CharacterState.IDLE);
         assertThat(session.finish(enemy, running.getId(), NOW)).isEmpty();
-        assertThatThrownBy(() -> session.enqueue(enemy, ActionType.ATTACK, NOW))
-                .isInstanceOfSatisfying(GameException.class,
-                        e -> assertThat(e.errorCode()).isEqualTo(ErrorCode.CHARACTER_DEAD));
+        assertError(() -> session.enqueue(enemy, ActionType.ATTACK, NOW), ErrorCode.ROUND_OVER);
+        assertError(() -> session.enqueue(player, ActionType.ATTACK, NOW), ErrorCode.ROUND_OVER);
+    }
 
-        // 쓰러진 상대는 더 맞지 않는다.
-        assertThat(finishRun(player, ActionType.ATTACK).attackHit()).isEmpty();
-        assertThat(enemy.getHp()).isZero();
+    @Test
+    void 판이_끝나면_예약된_자동_초기화로_새_판이_시작된다() {
+        knockOutEnemy();
+        long round = session.getRound();
+
+        assertThat(session.resetRound(round, NOW)).isTrue();
+
+        assertThat(session.getStatus()).isEqualTo(SessionStatus.PLAYING);
+        assertThat(session.getRound()).isEqualTo(round + 1);
+        assertThat(enemy.getHp()).isEqualTo(100);
+        assertThat(enemy.getState()).isEqualTo(CharacterState.IDLE);
+        assertThat(player.getY()).isEqualTo(7);
+    }
+
+    @Test
+    void 이미_지난_판의_자동_초기화는_무시된다() {
+        knockOutEnemy();
+        long round = session.getRound();
+        session.reset(NOW);
+        run(player, ActionType.MOVE_FORWARD);
+
+        assertThat(session.resetRound(round, NOW)).isFalse();
+        assertThat(player.getY()).isEqualTo(6);
     }
 
     @Test
@@ -257,6 +283,94 @@ class GameSessionTest {
         assertThat(enemy.getHp()).isEqualTo(100);
         assertThat(enemy.getState()).isEqualTo(CharacterState.IDLE);
         assertThat(session.enqueue(enemy, ActionType.ATTACK, NOW)).isNotNull();
+    }
+
+    @Test
+    void SOLO는_한_명이_두_캐릭터를_맡고_더_참가할_수_없다() {
+        Participant me = session.join(NOW);
+
+        assertThat(me.getControls()).containsExactly(CharacterType.PLAYER, CharacterType.ENEMY);
+        assertThat(session.findParticipant(me.getToken())).contains(me);
+        assertThat(session.findParticipant("wrong-token")).isEmpty();
+        assertThat(session.findParticipant((String) null)).isEmpty();
+        assertError(() -> session.join(NOW), ErrorCode.SESSION_FULL);
+    }
+
+    @Test
+    void MULTI는_두_명이_모이면_시작하고_자기_캐릭터만_조종한다() {
+        GameSession multi = new GameSession(UUID.randomUUID(), SessionMode.MULTI, NOW);
+        Participant host = multi.join(NOW);
+        GameCharacter hostCharacter = multi.character(CharacterType.PLAYER);
+
+        assertThat(multi.getStatus()).isEqualTo(SessionStatus.WAITING);
+        assertThat(host.getControls()).containsExactly(CharacterType.PLAYER);
+        assertError(() -> multi.enqueue(hostCharacter, ActionType.ATTACK, NOW), ErrorCode.WAITING_FOR_OPPONENT);
+
+        Participant guest = multi.join(NOW);
+
+        assertThat(guest.getControls()).containsExactly(CharacterType.ENEMY);
+        assertThat(multi.getStatus()).isEqualTo(SessionStatus.PLAYING);
+        assertThat(host.getToken()).isNotEqualTo(guest.getToken());
+        assertError(() -> multi.join(NOW), ErrorCode.SESSION_FULL);
+        assertError(() -> multi.checkControls(guest, hostCharacter), ErrorCode.NOT_YOUR_CHARACTER);
+        assertError(() -> multi.reset(NOW), ErrorCode.RESET_NOT_ALLOWED);
+    }
+
+    @Test
+    void MULTI에서_한_명이_나가면_판을_버리고_새_상대를_기다린다() {
+        GameSession multi = new GameSession(UUID.randomUUID(), SessionMode.MULTI, NOW);
+        Participant host = multi.join(NOW);
+        Participant guest = multi.join(NOW);
+        GameCharacter hostCharacter = multi.character(CharacterType.PLAYER);
+        multi.enqueue(hostCharacter, ActionType.MOVE_FORWARD, NOW);
+        multi.startNext(hostCharacter, NOW);
+
+        assertThat(multi.leave(host, NOW)).isFalse();
+
+        assertThat(multi.getStatus()).isEqualTo(SessionStatus.WAITING);
+        assertThat(hostCharacter.queueLength()).isZero();
+        assertThat(multi.findParticipant(host.getToken())).isEmpty();
+
+        Participant newcomer = multi.join(NOW);
+        assertThat(newcomer.getControls()).containsExactly(CharacterType.PLAYER);
+        assertThat(multi.getStatus()).isEqualTo(SessionStatus.PLAYING);
+
+        assertThat(multi.leave(guest, NOW)).isFalse();
+        assertThat(multi.leave(newcomer, NOW)).isTrue();
+    }
+
+    @Test
+    void 연결이_모두_끊긴_뒤의_시간으로_자리를_비웠는지_판단한다() {
+        Participant me = session.join(NOW);
+        assertThat(me.isAbsentSince(NOW)).isTrue();
+
+        assertThat(me.connect()).isTrue();
+        assertThat(me.connect()).isFalse();
+        assertThat(me.isAbsentSince(NOW.plusSeconds(60))).isFalse();
+
+        assertThat(me.disconnect(NOW.plusSeconds(1))).isFalse();
+        assertThat(me.disconnect(NOW.plusSeconds(2))).isTrue();
+        assertThat(me.isConnected()).isFalse();
+        assertThat(me.isAbsentSince(NOW.plusSeconds(1))).isFalse();
+        assertThat(me.isAbsentSince(NOW.plusSeconds(2))).isTrue();
+    }
+
+    private void knockOutEnemy() {
+        moveFaceToFace();
+        for (int i = 0; i < 10; i++) {
+            finishRun(player, ActionType.ATTACK);
+        }
+        assertThat(session.getStatus()).isEqualTo(SessionStatus.ROUND_OVER);
+    }
+
+    private GameSession.FinishResult finishRunAhead(QueuedAction head) {
+        session.startNext(player, NOW).orElseThrow();
+        return session.finish(player, head.getId(), NOW).orElseThrow();
+    }
+
+    private static void assertError(org.assertj.core.api.ThrowableAssert.ThrowingCallable call, ErrorCode expected) {
+        assertThatThrownBy(call).isInstanceOfSatisfying(GameException.class,
+                e -> assertThat(e.errorCode()).isEqualTo(expected));
     }
 
     // 플레이어를 (6,2)로 옮겨 (6,1)의 적과 마주 보게 한다. 플레이어는 N, 적은 S를 본다.

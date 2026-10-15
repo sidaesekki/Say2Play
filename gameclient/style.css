@@ -23,3 +23,9 @@ button:disabled,textarea:disabled{cursor:not-allowed;opacity:.55}.connection-err
 
 .actor-status .hp{display:flex;align-items:center;gap:6px;white-space:nowrap}.hp-bar{width:64px;height:5px;border-radius:3px;background:#e4e9de;overflow:hidden;display:block}.hp-bar i{display:block;height:100%;width:100%;border-radius:3px;background:#88a66d;transition:width .3s}.enemy-status .hp-bar i{background:#c98f83}.actor-status .hp b{min-width:20px}
 .result-banner{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;gap:6px;text-align:center;background:#fffffff0;border:1px solid #dfe6dc;border-radius:12px;padding:18px 28px;box-shadow:0 8px 30px #2a3d3214}.result-banner b{font-size:20px;letter-spacing:-.6px}.result-banner span{font-size:11px;color:#87918b}
+.lobby{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:8px}.lobby-card{border:1px solid #dfe6dc;border-radius:15px;background:#fff;padding:28px;text-align:left;display:grid;gap:10px;color:inherit}.lobby-card:hover{border-color:#a9c08f}.lobby-card b{font-size:20px;letter-spacing:-.6px}.lobby-card span:last-child{font-size:12px;color:#87918b}.lobby-card .number{justify-self:start}
+.invite{display:flex;gap:8px;margin-top:6px;min-width:280px}.invite input{flex:1;min-width:0;border:1px solid #dce4d4;background:#f9fbf6;border-radius:7px;padding:7px 9px;font-size:11px;color:#3c5543}.invite .session-button{margin:0;white-space:nowrap}.invite-panel .description{margin:8px 0 10px}
+.actor-name .seat{font-style:normal;font-size:9px;color:#6d8064;border:1px solid #dfe6dc;border-radius:4px;padding:2px 5px;letter-spacing:.4px}
+@media(max-width:740px){.lobby{grid-template-columns:1fr}.invite{min-width:0}}
+/* The textarea is locked with readOnly instead of disabled so it keeps focus while a command is being resolved. */
+textarea[aria-disabled="true"]{cursor:not-allowed;opacity:.55}

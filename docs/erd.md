@@ -1,23 +1,26 @@
-# Say2Play ERD v1 (싱글플레이)
+# Say2Play ERD v1 (혼자 하기 · 1:1 멀티플레이)
 
 ## 1. 개요
 
 - 기준 프로토타입: `gameclient/` (13×9 그리드 탑뷰 훈련장, 플레이어 + 적 캐릭터)
-- 사용자 계정은 없고 **게스트 세션**으로만 식별한다.
+- 사용자 계정은 없다. 세션에 참가하면 발급되는 **참가자 토큰**으로 사람을 구분한다(`PARTICIPANT`).
 - 모든 게임 상태는 **서버 메모리**에 둔다. 클라이언트는 서버가 보내는 상태를 렌더링만 한다.
 - 영구 저장(DB)은 하지 않는다. 아래 테이블은 서버가 메모리에 들고 있는 엔티티 구조이며, 세션이 끝나면 모두 폐기된다.
 - Action Set은 코드에 고정하며, 행동 이름은 aiserver(Jev)의 `actions.json` 키를 그대로 쓴다(→ 4. 코드 고정값).
 - AI는 입력 텍스트 1건을 항상 Action Set 안에서 가장 비슷한 Action **1개**로 매칭한다. Jev가 명령이 아니라고 판별해도(`is_command = false`) 무시하고 `choice`를 그대로 쓴다.
-- 세션 하나에 캐릭터가 2개(`PLAYER`, `ENEMY`) 있고, **한 사용자가 두 캐릭터를 각각 텍스트로 조종**한다. 캐릭터마다 큐가 따로 있어 독립적으로 실행된다.
-- 이후 멀티플레이(같은 세션 상태를 여러 클라이언트에 브로드캐스트)를 고려해 `GAME_SESSION`과 `CHARACTER`를 1:N으로 분리한다.
+- 세션 하나에 캐릭터가 2개(`PLAYER`, `ENEMY`) 있다. 캐릭터마다 큐가 따로 있어 독립적으로 실행된다.
+  - `SOLO`(혼자 하기): 참가자 1명이 두 캐릭터를 모두 텍스트로 조종한다.
+  - `MULTI`(1:1): 참가자 2명이 캐릭터를 하나씩 맡는다. 만든 사람이 `PLAYER`, 초대 링크로 들어온 사람이 `ENEMY`다.
+- 같은 세션의 모든 참가자에게 같은 상태 변화를 STOMP로 브로드캐스트한다.
 
 ### 처리 흐름
 
-1. 클라이언트가 세션을 생성하면 서버가 `GAME_SESSION`과 `CHARACTER` 2개(`PLAYER`, `ENEMY`)를 만든다.
-2. 사용자가 조종할 캐릭터를 정해 입력한 원문 텍스트를 서버로 보낸다.
+1. 클라이언트가 세션을 생성하면 서버가 `GAME_SESSION`, `CHARACTER` 2개(`PLAYER`, `ENEMY`), 만든 사람의 `PARTICIPANT`를 만든다. `MULTI`는 상대가 초대 링크로 참가(`PARTICIPANT` 추가)할 때까지 기다린다.
+2. 참가자가 자기 캐릭터에게 입력한 원문 텍스트를 서버로 보낸다.
 3. 서버가 텍스트를 aiserver에 HTTP로 넘기고, aiserver는 Jev로 Action Set 중 가장 비슷한 Action 1개(`choice`)를 반환한다. 호출이 실패하거나 시간을 넘기면 큐에 넣지 않고 에러를 돌려준다(→ 4. AI 호출 규칙).
 4. 서버는 반환된 Action을 해당 캐릭터의 `ACTION_QUEUE`에 넣고 순서대로 실행하며 `CHARACTER` 상태를 갱신한다.
-5. 서버가 갱신된 상태를 클라이언트에 전송한다. 멀티플레이에서는 같은 세션의 모든 클라이언트에 브로드캐스트한다.
+5. 서버가 갱신된 상태를 같은 세션의 모든 참가자에게 브로드캐스트한다.
+6. 공격으로 한쪽이 쓰러지면 판이 끝나고, 3초 뒤 두 캐릭터가 시작 상태로 돌아가 새 판이 시작된다(→ 4. 판·참가 규칙).
 
 ---
 
@@ -26,11 +29,14 @@
 ```mermaid
 erDiagram
     GAME_SESSION ||--|{ CHARACTER : "has (v1: PLAYER 1 + ENEMY 1)"
+    GAME_SESSION ||--|{ PARTICIPANT : "joined by (SOLO 1, MULTI 1~2)"
     CHARACTER ||--o{ ACTION_QUEUE : "queues"
 
     GAME_SESSION {
         uuid id PK
+        enum mode
         enum status
+        bigint round
         int map_cols
         int map_rows
         timestamp created_at
@@ -47,6 +53,15 @@ erDiagram
         int hp
         timestamp created_at
         timestamp updated_at
+    }
+    PARTICIPANT {
+        uuid id PK
+        uuid session_id FK
+        string token UK
+        enum controls
+        int connections
+        timestamp disconnected_since
+        timestamp joined_at
     }
     ACTION_QUEUE {
         uuid id PK
@@ -73,11 +88,29 @@ erDiagram
 | 컬럼 | 타입 | 제약 | 설명 |
 | --- | --- | --- | --- |
 | id | uuid | PK | 세션 식별자. 클라이언트가 이후 요청과 연결에 사용 |
-| status | enum | NOT NULL, DEFAULT 'PLAYING' | 세션 상태 (`PLAYING`, `ENDED`) |
+| mode | enum | NOT NULL | 세션 종류 (`SOLO`, `MULTI`) |
+| status | enum | NOT NULL | 세션 상태. `WAITING`(MULTI 상대 대기), `PLAYING`(명령 받는 중), `ROUND_OVER`(한쪽이 쓰러져 자동 초기화 대기), `ENDED`. 생성 시 SOLO는 `PLAYING`, MULTI는 `WAITING` |
+| round | bigint | NOT NULL, DEFAULT 1 | 판 번호. 새 판이 시작될 때마다 1 증가. 예약된 자동 초기화가 지난 판의 것인지 가리는 데 씀 |
 | map_cols | int | NOT NULL, DEFAULT 13 | 맵 가로 칸 수 |
 | map_rows | int | NOT NULL, DEFAULT 9 | 맵 세로 칸 수 |
 | created_at | timestamp | NOT NULL | 세션 생성 시점 |
 | last_active_at | timestamp | NOT NULL | 마지막 입력 시점. 유휴 세션 정리 기준 |
+
+---
+
+### PARTICIPANT: 세션에 참가한 사람
+
+| 컬럼 | 타입 | 제약 | 설명 |
+| --- | --- | --- | --- |
+| id | uuid | PK | 참가자 식별자. 외부에 노출하지 않음 |
+| session_id | uuid | FK(GAME_SESSION), NOT NULL | 소속 세션 |
+| token | string | NOT NULL, UK | 참가자 토큰(32바이트 난수, base64url). 세션 생성·참가 응답에서만 내려주며 REST `X-Player-Token`과 STOMP CONNECT에 사용 |
+| controls | enum set | NOT NULL | 맡은 캐릭터. SOLO는 `PLAYER`+`ENEMY`, MULTI는 하나. 세션 안에서 겹치지 않음 |
+| connections | int | NOT NULL, DEFAULT 0 | 열려 있는 STOMP 연결 수 |
+| disconnected_since | timestamp |  | 연결이 하나도 없게 된 시점. 연결 중이면 null. 재접속 유예 판단 기준 |
+| joined_at | timestamp | NOT NULL | 참가 시점 |
+
+- 나가면 행이 삭제되고 토큰은 무효가 된다(→ 4. 판·참가 규칙).
 
 ---
 
@@ -155,9 +188,22 @@ erDiagram
 - 적중하면 상대의 `hp`가 10 줄어든다. `hp`는 0 아래로 내려가지 않는다.
 - 상대가 `defend`를 실행 중(`RUNNING`)이고 공격자를 마주 보고 있으면(상대 facing이 공격자 facing의 반대) 막은 것으로 보고 피해는 0이다. 옆이나 뒤에서 맞으면 막지 못한다.
 - `hp`가 0이 되면 `state`가 `DEAD`가 되고, 실행 중인 동작을 포함해 그 캐릭터의 큐를 모두 비운다.
-  - `DEAD` 캐릭터는 명령을 받지 않는다. 더 이상 맞지 않지만, 그 칸은 계속 막힌 칸으로 취급한다.
-  - 세션은 끝나지 않는다. 초기화하면 두 캐릭터 모두 `hp` 100, `IDLE`로 돌아온다.
+  - `DEAD` 캐릭터는 더 이상 맞지 않는다. 판이 끝난 동안에는 두 캐릭터 모두 명령을 받지 않는다.
+  - 판이 끝나고(`ROUND_OVER`) 3초 뒤 자동으로 두 캐릭터 모두 `hp` 100, `IDLE`로 돌아온다(→ 판·참가 규칙).
 - 빗나가면 아무 일도 없고, 동작 시간은 그대로 소요된다.
+
+### 판·참가 규칙
+
+- **참가:** MULTI는 빈 자리를 `PLAYER` → `ENEMY` 순으로 채운다. 두 명이 모이면 두 캐릭터를 시작 상태로 두고 `PLAYING`이 된다. 자리가 다 찼거나 SOLO 세션이면 참가할 수 없다.
+- **명령 권한:** 자기가 맡은(`controls`) 캐릭터에만 명령할 수 있고, 세션이 `PLAYING`일 때만 받는다.
+- **판 종료:** 공격으로 한쪽 `hp`가 0이 되면 세션이 `ROUND_OVER`가 된다. 두 캐릭터의 실행 중인 동작과 대기 동작을 모두 비우고 명령을 받지 않는다.
+- **자동 초기화:** 판이 끝나고 3초 뒤 두 캐릭터를 시작 상태(`hp` 100, `IDLE`)로 되돌리고 `round`를 올린 뒤 `PLAYING`이 된다(두 모드 공통).
+- **수동 초기화:** SOLO만 할 수 있다. 언제든 시작 상태로 되돌리며, `ROUND_OVER` 중이면 예약된 자동 초기화는 무시된다. MULTI는 수동 초기화가 없다.
+- **나가기:** 참가자가 나가면 `PARTICIPANT`를 지운다.
+  - 남은 참가자가 없으면 세션을 종료한다(`ENDED`).
+  - MULTI에서 한 명이 남으면 진행 중이던 판을 즉시 중단하고 두 캐릭터를 시작 상태로 되돌린 뒤 `WAITING`이 된다. 같은 초대 링크로 새 상대가 들어올 수 있다.
+- **재접속 유예:** 참가자의 STOMP 연결이 모두 끊긴 뒤(또는 참가 후 한 번도 연결하지 않은 채) 10초가 지나면 나간 것으로 처리한다. 그 안에 같은 토큰으로 다시 연결하면 자리를 유지한다.
+- **만료:** 마지막 입력(`last_active_at`) 이후 30분이 지나면 세션을 종료한다. 상대를 기다리는 `WAITING` 세션도 같다.
 
 ### AI 호출 규칙
 

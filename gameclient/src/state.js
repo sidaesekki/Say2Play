@@ -5,7 +5,7 @@ const durations = {move_forward:320,move_backward:320,turn_left:300,turn_right:3
 const kind = type => type.startsWith('move_') ? 'move' : type.startsWith('turn_') ? 'turn' : type;
 const states = {move:'MOVING',turn:'TURNING',attack:'ATTACKING',defend:'DEFENDING',roll:'ROLLING'};
 export function snapshot(data) {
-  return {...data, characters:data.characters.map(c => {
+  return {...data, round:null, characters:data.characters.map(c => {
     const action = c.queue?.find(a => a.status === 'RUNNING');
     let animation = null;
     if (action) {
@@ -17,7 +17,12 @@ export function snapshot(data) {
   })};
 }
 export function applyEvent(game, {type,data}) {
-  if (type==='SESSION_RESET') return {...game,characters:snapshot({characters:data.characters}).characters};
+  const fresh = d => ({...game,session:d.session,round:null,characters:snapshot({characters:d.characters}).characters});
+  if (type==='SESSION_RESET') return fresh(data);
+  if (type==='ROUND_OVER') return {...game,session:{...game.session,status:'ROUND_OVER'},round:{...data,resetAt:Date.parse(data.resetAt)},characters:game.characters.map(c=>({...c,queue:[],animation:null}))};
+  if (type==='PLAYER_JOINED') return {...fresh(data),players:[...(game.players||[]),{controls:data.controls,connected:false}]};
+  if (type==='PLAYER_LEFT') return {...fresh(data),players:(game.players||[]).filter(p=>p.controls[0]!==data.controls[0])};
+  if (type==='PLAYER_CONNECTION') return {...game,players:(game.players||[]).map(p=>p.controls[0]===data.controls[0]?{...p,connected:data.connected}:p)};
   if (type==='SESSION_ENDED') return {...game,session:{...game.session,status:'ENDED'},characters:game.characters.map(c=>({...c,animation:null,queue:[]}))};
   return {...game,characters:game.characters.map(c=>{
     if(type==='ACTION_STARTED' && c.id===data.characterId) return {...c,...data.from,state:states[kind(data.action.actionType)],queue:[data.action,...c.queue.filter(a=>a.id!==data.action.id)],animation:{...data,start:Date.parse(data.action.startedAt)||Date.now()}};
